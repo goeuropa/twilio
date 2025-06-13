@@ -1,0 +1,316 @@
+package client
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"oba-twilio/models"
+)
+
+func TestGetStopInfo_InvalidResponse(t *testing.T) {
+	tests := []struct {
+		name     string
+		response interface{}
+		wantErr  string
+	}{
+		{
+			name: "Missing stop ID",
+			response: struct {
+				Data struct {
+					Entry struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"entry"`
+					References struct {
+						Agencies []struct {
+							ID   string `json:"id"`
+							Name string `json:"name"`
+						} `json:"agencies"`
+					} `json:"references"`
+				} `json:"data"`
+				Code int    `json:"code"`
+				Text string `json:"text"`
+			}{
+				Data: struct {
+					Entry struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"entry"`
+					References struct {
+						Agencies []struct {
+							ID   string `json:"id"`
+							Name string `json:"name"`
+						} `json:"agencies"`
+					} `json:"references"`
+				}{
+					Entry: struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					}{
+						ID:   "", // Missing ID
+						Name: "Test Stop",
+					},
+				},
+				Code: 200,
+				Text: "OK",
+			},
+			wantErr: "invalid response: missing stop ID",
+		},
+		{
+			name: "Missing stop name",
+			response: struct {
+				Data struct {
+					Entry struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"entry"`
+					References struct {
+						Agencies []struct {
+							ID   string `json:"id"`
+							Name string `json:"name"`
+						} `json:"agencies"`
+					} `json:"references"`
+				} `json:"data"`
+				Code int    `json:"code"`
+				Text string `json:"text"`
+			}{
+				Data: struct {
+					Entry struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"entry"`
+					References struct {
+						Agencies []struct {
+							ID   string `json:"id"`
+							Name string `json:"name"`
+						} `json:"agencies"`
+					} `json:"references"`
+				}{
+					Entry: struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					}{
+						ID:   "1_12345",
+						Name: "", // Missing name
+					},
+				},
+				Code: 200,
+				Text: "OK",
+			},
+			wantErr: "invalid response: missing stop name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(tt.response)
+			}))
+			defer server.Close()
+
+			client := NewOneBusAwayClient(server.URL, "test-key")
+			
+			_, err := client.GetStopInfo("1_12345")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestInitializeCoverage_InvalidCoordinates(t *testing.T) {
+	tests := []struct {
+		name     string
+		lat      float64
+		lon      float64
+		wantErr  string
+	}{
+		{
+			name:    "Invalid latitude too high",
+			lat:     91.0,
+			lon:     -122.0,
+			wantErr: "invalid latitude",
+		},
+		{
+			name:    "Invalid latitude too low",
+			lat:     -91.0,
+			lon:     -122.0,
+			wantErr: "invalid latitude",
+		},
+		{
+			name:    "Invalid longitude too high",
+			lat:     47.0,
+			lon:     181.0,
+			wantErr: "invalid longitude",
+		},
+		{
+			name:    "Invalid longitude too low",
+			lat:     47.0,
+			lon:     -181.0,
+			wantErr: "invalid longitude",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockResponse := models.AgenciesWithCoverageResponse{
+				Data: struct {
+					LimitExceeded bool `json:"limitExceeded"`
+					List []struct {
+						AgencyID string  `json:"agencyId"`
+						Lat      float64 `json:"lat"`
+						LatSpan  float64 `json:"latSpan"`
+						Lon      float64 `json:"lon"`
+						LonSpan  float64 `json:"lonSpan"`
+					} `json:"list"`
+				}{
+					List: []struct {
+						AgencyID string  `json:"agencyId"`
+						Lat      float64 `json:"lat"`
+						LatSpan  float64 `json:"latSpan"`
+						Lon      float64 `json:"lon"`
+						LonSpan  float64 `json:"lonSpan"`
+					}{
+						{
+							AgencyID: "test",
+							Lat:      tt.lat,
+							LatSpan:  0.5,
+							Lon:      tt.lon,
+							LonSpan:  0.8,
+						},
+					},
+				},
+				Code: 200,
+				Text: "OK",
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(mockResponse)
+			}))
+			defer server.Close()
+
+			client := NewOneBusAwayClient(server.URL, "test-key")
+			
+			err := client.InitializeCoverage()
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestSearchStops_InvalidCoordinates(t *testing.T) {
+	mockStopData := models.StopData{
+		Data: struct {
+			List []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+				Lat  float64 `json:"lat"`
+				Lon  float64 `json:"lon"`
+			} `json:"list"`
+		}{
+			List: []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+				Lat  float64 `json:"lat"`
+				Lon  float64 `json:"lon"`
+			}{
+				{
+					ID:   "1_12345",
+					Name: "Test Stop",
+					Lat:  91.0, // Invalid latitude
+					Lon:  -122.3321,
+				},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockStopData)
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	// Initialize with valid coverage first
+	client.coverageArea = &models.CoverageArea{
+		CenterLat: 47.6062,
+		CenterLon: -122.3321,
+		Radius:    25000.0,
+	}
+	
+	_, err := client.SearchStops("test")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid latitude")
+}
+
+func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
+	mockResponse := models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			}{
+				Stop: struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				}{
+					ID: "", // Missing stop ID
+					Name: "Test Stop",
+				},
+			},
+		},
+		Code: 200,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	_, err := client.GetArrivalsAndDepartures("1_12345")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing stop information")
+}

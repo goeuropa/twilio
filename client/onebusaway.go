@@ -67,8 +67,21 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Validate API response structure
 	if coverageResp.Code != 200 {
 		return fmt.Errorf("API error: %s (code %d)", coverageResp.Text, coverageResp.Code)
+	}
+	// Additional validation for coverage response
+	for i, agency := range coverageResp.Data.List {
+		if agency.AgencyID == "" {
+			return fmt.Errorf("invalid response: agency %d missing ID", i)
+		}
+		if agency.Lat < -90 || agency.Lat > 90 {
+			return fmt.Errorf("invalid response: agency %s has invalid latitude %f", agency.AgencyID, agency.Lat)
+		}
+		if agency.Lon < -180 || agency.Lon > 180 {
+			return fmt.Errorf("invalid response: agency %s has invalid longitude %f", agency.AgencyID, agency.Lon)
+		}
 	}
 
 	if len(coverageResp.Data.List) == 0 {
@@ -203,8 +216,12 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Validate API response structure
 	if obaResp.Code != 200 {
 		return nil, fmt.Errorf("API error: %s (code %d)", obaResp.Text, obaResp.Code)
+	}
+	if obaResp.Data.Entry.Stop.ID == "" {
+		return nil, fmt.Errorf("invalid response: missing stop information")
 	}
 
 	return &obaResp, nil
@@ -351,8 +368,15 @@ func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, e
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Validate API response structure
 	if stopResp.Code != 200 {
 		return nil, fmt.Errorf("API error: %s (code %d)", stopResp.Text, stopResp.Code)
+	}
+	if stopResp.Data.Entry.ID == "" {
+		return nil, fmt.Errorf("invalid response: missing stop ID")
+	}
+	if stopResp.Data.Entry.Name == "" {
+		return nil, fmt.Errorf("invalid response: missing stop name")
 	}
 
 	agencyName := c.getAgencyNameFromID(fullStopID, stopResp.Data.References.Agencies)
@@ -461,8 +485,21 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Validate API response structure
 	if stopData.Code != 200 {
 		return nil, fmt.Errorf("API error: %s (code %d)", stopData.Text, stopData.Code)
+	}
+	// Validate stop data
+	for i, stop := range stopData.Data.List {
+		if stop.ID == "" {
+			return nil, fmt.Errorf("invalid response: stop %d missing ID", i)
+		}
+		if stop.Lat < -90 || stop.Lat > 90 {
+			return nil, fmt.Errorf("invalid response: stop %s has invalid latitude %f", stop.ID, stop.Lat)
+		}
+		if stop.Lon < -180 || stop.Lon > 180 {
+			return nil, fmt.Errorf("invalid response: stop %s has invalid longitude %f", stop.ID, stop.Lon)
+		}
 	}
 
 	stops := make([]models.Stop, len(stopData.Data.List))
