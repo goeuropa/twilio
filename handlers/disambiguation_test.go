@@ -220,7 +220,8 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 	session := &models.DisambiguationSession{
 		StopOptions: stopOptions,
 	}
-	smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+	err := smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+	assert.NoError(t, err)
 
 	mockResponse := &models.OneBusAwayResponse{
 		Data: struct {
@@ -309,7 +310,8 @@ func TestSMSHandler_DisambiguationChoice_Invalid(t *testing.T) {
 	session := &models.DisambiguationSession{
 		StopOptions: stopOptions,
 	}
-	smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+	err := smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+	assert.NoError(t, err)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -350,7 +352,8 @@ func TestSessionStore_SetAndGet(t *testing.T) {
 		},
 	}
 	
-	store.SetDisambiguationSession("+14444444444", session)
+	err := store.SetDisambiguationSession("+14444444444", session)
+	assert.NoError(t, err)
 	
 	retrieved := store.GetDisambiguationSession("+14444444444")
 	assert.NotNil(t, retrieved)
@@ -368,7 +371,8 @@ func TestSessionStore_Clear(t *testing.T) {
 		},
 	}
 	
-	store.SetDisambiguationSession("+14444444444", session)
+	err := store.SetDisambiguationSession("+14444444444", session)
+	assert.NoError(t, err)
 	store.ClearDisambiguationSession("+14444444444")
 	
 	retrieved := store.GetDisambiguationSession("+14444444444")
@@ -394,7 +398,7 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 	// Writers
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			store.SetDisambiguationSession(phoneNumber, session)
+			store.SetDisambiguationSession(phoneNumber, session) // Ignore error in test goroutine
 			done <- true
 		}()
 	}
@@ -427,7 +431,8 @@ func TestSessionStore_ProperCleanup(t *testing.T) {
 		},
 	}
 	
-	store.SetDisambiguationSession("+14444444444", session)
+	err := store.SetDisambiguationSession("+14444444444", session)
+	assert.NoError(t, err)
 	
 	// Manually expire the session by manipulating the internal state
 	store.mutex.Lock()
@@ -441,4 +446,66 @@ func TestSessionStore_ProperCleanup(t *testing.T) {
 	assert.Nil(t, retrieved)
 	
 	store.Close()
+}
+
+func TestSessionStore_PhoneNumberValidation(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+	
+	session := &models.DisambiguationSession{
+		StopOptions: []models.StopOption{
+			{FullStopID: "1_12345", DisplayText: "Test Stop"},
+		},
+	}
+	
+	tests := []struct {
+		name        string
+		phoneNumber string
+		shouldError bool
+	}{
+		{"Valid US phone number", "+14444444444", false},
+		{"Valid US phone number 2", "+15551234567", false},
+		{"Invalid format - no plus", "14444444444", true},
+		{"Invalid format - too short", "+144444444", true},
+		{"Invalid format - too long", "+144444444444", true},
+		{"Invalid format - not US", "+44123456789", true},
+		{"Invalid format - empty", "", true},
+		{"Invalid format - letters", "+1abcdefghij", true},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.SetDisambiguationSession(tt.phoneNumber, session)
+			if tt.shouldError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid phone number format")
+			} else {
+				assert.NoError(t, err)
+				// Clean up valid entries
+				store.ClearDisambiguationSession(tt.phoneNumber)
+			}
+		})
+	}
+}
+
+func TestSessionStore_GetWithInvalidPhoneNumber(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+	
+	tests := []struct {
+		name        string
+		phoneNumber string
+	}{
+		{"Invalid format - no plus", "14444444444"},
+		{"Invalid format - too short", "+144444444"},
+		{"Invalid format - empty", ""},
+		{"Invalid format - letters", "+1abcdefghij"},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := store.GetDisambiguationSession(tt.phoneNumber)
+			assert.Nil(t, session, "Invalid phone number should return nil")
+		})
+	}
 }

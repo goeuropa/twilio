@@ -92,7 +92,12 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 		session := &models.DisambiguationSession{
 			StopOptions: matchingStops,
 		}
-		h.SessionStore.SetDisambiguationSession(req.From, session)
+		if err := h.SessionStore.SetDisambiguationSession(req.From, session); err != nil {
+			log.Printf("Failed to store disambiguation session for %s: %v", req.From, err)
+			twiml, _ := formatters.GenerateTwiMLSMS("Sorry, there was an error processing your request. Please try again.")
+			c.String(http.StatusOK, twiml)
+			return
+		}
 		
 		twiml, _ := formatters.GenerateTwiMLSMS(disambiguationMsg)
 		c.String(http.StatusOK, twiml)

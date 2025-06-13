@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -12,6 +14,8 @@ const (
 	sessionTimeoutMinutes = 10
 	cleanupIntervalMinutes = 5
 )
+
+var phoneRegex = regexp.MustCompile(`^\+1\d{10}$`)
 
 type SessionStore struct {
 	sessions  map[string]*models.DisambiguationSession
@@ -34,15 +38,24 @@ func NewSessionStore() *SessionStore {
 	return store
 }
 
-func (s *SessionStore) SetDisambiguationSession(phoneNumber string, session *models.DisambiguationSession) {
+func (s *SessionStore) SetDisambiguationSession(phoneNumber string, session *models.DisambiguationSession) error {
+	if !phoneRegex.MatchString(phoneNumber) {
+		return fmt.Errorf("invalid phone number format: %s", phoneNumber)
+	}
+	
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	
 	session.CreatedAt = time.Now().Unix()
 	s.sessions[phoneNumber] = session
+	return nil
 }
 
 func (s *SessionStore) GetDisambiguationSession(phoneNumber string) *models.DisambiguationSession {
+	if !phoneRegex.MatchString(phoneNumber) {
+		return nil // Invalid phone number format
+	}
+	
 	s.mutex.RLock()
 	session, exists := s.sessions[phoneNumber]
 	if !exists {
