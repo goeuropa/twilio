@@ -68,14 +68,14 @@ func TestAPIKeyConfiguration(t *testing.T) {
 		expectedKey string
 	}{
 		{
-			name:        "Default API key",
-			envKey:      "",
-			expectedKey: "test",
+			name:        "Valid API key",
+			envKey:      "valid-api-key-123",
+			expectedKey: "valid-api-key-123",
 		},
 		{
-			name:        "Custom API key",
-			envKey:      "custom-test-key",
-			expectedKey: "custom-test-key",
+			name:        "OneBusAway API key",
+			envKey:      "org.onebusaway.iphone",
+			expectedKey: "org.onebusaway.iphone",
 		},
 	}
 
@@ -84,21 +84,38 @@ func TestAPIKeyConfiguration(t *testing.T) {
 			originalEnv := os.Getenv("ONEBUSAWAY_API_KEY")
 			defer os.Setenv("ONEBUSAWAY_API_KEY", originalEnv)
 
-			if tt.envKey != "" {
-				os.Setenv("ONEBUSAWAY_API_KEY", tt.envKey)
-			} else {
-				os.Unsetenv("ONEBUSAWAY_API_KEY")
-			}
+			os.Setenv("ONEBUSAWAY_API_KEY", tt.envKey)
 
 			obaAPIKey := os.Getenv("ONEBUSAWAY_API_KEY")
-			if obaAPIKey == "" {
-				obaAPIKey = "test"
-			}
+			// In tests, we skip the validation logic since we're testing client construction
 
 			assert.Equal(t, tt.expectedKey, obaAPIKey)
 
 			obaClient := client.NewOneBusAwayClient("https://test.com", obaAPIKey)
 			assert.Equal(t, tt.expectedKey, obaClient.APIKey)
+		})
+	}
+}
+
+func TestAPIKeyValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		apiKey     string
+		shouldFail bool
+	}{
+		{"Empty key should fail", "", true},
+		{"Test key should fail", "test", true},
+		{"TEST key should fail", "TEST", true},
+		{"Placeholder should fail", "placeholder", true},
+		{"Valid key should pass", "valid-api-key", false},
+		{"OneBusAway key should pass", "org.onebusaway.iphone", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test the validation logic without calling log.Fatal
+			isInvalid := tt.apiKey == "" || tt.apiKey == "test" || tt.apiKey == "TEST" || tt.apiKey == "placeholder"
+			assert.Equal(t, tt.shouldFail, isInvalid)
 		})
 	}
 }

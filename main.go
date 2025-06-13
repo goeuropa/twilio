@@ -23,7 +23,10 @@ func main() {
 
 	obaAPIKey := os.Getenv("ONEBUSAWAY_API_KEY")
 	if obaAPIKey == "" {
-		obaAPIKey = "test"
+		log.Fatal("ONEBUSAWAY_API_KEY environment variable is required but not set")
+	}
+	if obaAPIKey == "test" || obaAPIKey == "TEST" || obaAPIKey == "placeholder" {
+		log.Fatal("Invalid API key detected. Please set a valid ONEBUSAWAY_API_KEY environment variable")
 	}
 
 	obaBaseURL := os.Getenv("ONEBUSAWAY_BASE_URL")
