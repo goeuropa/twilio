@@ -228,8 +228,8 @@ Create a `.env` file or set environment variables:
 PORT=8080                    # Server port (default: 8080)
 
 # OneBusAway API Configuration
-ONEBUSAWAY_API_KEY=test                                    # API key (default provided)
-ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org  # API base URL (default: Puget Sound)
+ONEBUSAWAY_API_KEY=test # API key (default provided)
+ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org # API base URL (default: Puget Sound)
 
 # Twilio (optional - for outbound features)
 TWILIO_ACCOUNT_SID=your_account_sid_here
