@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:developer.onebusaway.org)",
+      "WebFetch(domain:www.twilio.com)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": []
+  }
+}

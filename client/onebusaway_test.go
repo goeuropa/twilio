@@ -1,0 +1,248 @@
+package client
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"oba-twilio/models"
+)
+
+func TestNewOneBusAwayClient(t *testing.T) {
+	client := NewOneBusAwayClient("https://api.example.com", "test-key")
+	
+	assert.Equal(t, "https://api.example.com", client.BaseURL)
+	assert.Equal(t, "test-key", client.APIKey)
+	assert.NotNil(t, client.Client)
+	assert.Equal(t, 10*time.Second, client.Client.Timeout)
+}
+
+func TestResolveStopID(t *testing.T) {
+	client := NewOneBusAwayClient("https://api.example.com", "test-key")
+	
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Full stop ID", "1_12345", "1_12345"},
+		{"Numeric only", "12345", "1_12345"},
+		{"With spaces", " 12345 ", "1_12345"},
+		{"Empty string", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := client.resolveStopID(tt.input)
+			if tt.expected == "" {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetArrivalsAndDepartures_Success(t *testing.T) {
+	mockResponse := models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			}{
+				ArrivalsAndDepartures: []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				}{
+					{
+						RouteShortName:        "8",
+						TripHeadsign:         "Seattle Center",
+						PredictedArrivalTime: time.Now().Unix()*1000 + 300000,
+						ScheduledArrivalTime: time.Now().Unix()*1000 + 240000,
+						Status:               "default",
+					},
+				},
+				Stop: struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				}{
+					ID:   "1_75403",
+					Name: "Pine St & 3rd Ave",
+				},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "arrivals-and-departures-for-stop") {
+			assert.Equal(t, "test-key", r.URL.Query().Get("key"))
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockResponse)
+		} else if strings.Contains(r.URL.Path, "/api/where/stop/") {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	resp, err := client.GetArrivalsAndDepartures("75403")
+	
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.Code)
+	assert.Equal(t, "Pine St & 3rd Ave", resp.Data.Entry.Stop.Name)
+	assert.Len(t, resp.Data.Entry.ArrivalsAndDepartures, 1)
+}
+
+func TestGetArrivalsAndDepartures_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	_, err := client.GetArrivalsAndDepartures("invalid")
+	
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "404")
+}
+
+func TestProcessArrivals(t *testing.T) {
+	client := NewOneBusAwayClient("https://api.example.com", "test-key")
+	now := time.Now().Unix() * 1000
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			}{
+				ArrivalsAndDepartures: []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				}{
+					{
+						RouteShortName:        "8",
+						TripHeadsign:         "Seattle Center",
+						PredictedArrivalTime: now + 300000,
+						Status:               "default",
+					},
+					{
+						RouteShortName:        "43",
+						TripHeadsign:         "Capitol Hill",
+						PredictedArrivalTime: now - 60000,
+						Status:               "default",
+					},
+					{
+						RouteShortName:        "49",
+						TripHeadsign:         "U District",
+						PredictedArrivalTime: now + 4000000,
+						Status:               "default",
+					},
+				},
+			},
+		},
+	}
+
+	arrivals := client.ProcessArrivals(mockResponse)
+	
+	assert.Len(t, arrivals, 1)
+	assert.Equal(t, "8", arrivals[0].RouteShortName)
+	assert.Equal(t, "Seattle Center", arrivals[0].TripHeadsign)
+	assert.Equal(t, 5, arrivals[0].MinutesUntilArrival)
+}
+
+func TestStopExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/where/stop/1_75403.json" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	assert.True(t, client.stopExists("1_75403"))
+	assert.False(t, client.stopExists("1_invalid"))
+}
