@@ -7,9 +7,20 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"oba-twilio/models"
+)
+
+const (
+	// apiTimeoutSeconds defines the maximum time to wait for API operations
+	// Set to 30 seconds to balance responsiveness with reliability for mobile users
+	apiTimeoutSeconds = 30
+	
+	// maxConcurrentRequests limits parallel API calls to prevent overwhelming the server
+	// Set to 10 to balance performance with server resource conservation
+	maxConcurrentRequests = 10
 )
 
 type OneBusAwayClient struct {
@@ -219,6 +230,178 @@ func (c *OneBusAwayClient) resolveStopID(stopID string) (string, error) {
 	}
 
 	return fmt.Sprintf("1_%s", stopID), nil
+}
+
+func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
+	stopID = strings.TrimSpace(stopID)
+	if stopID == "" {
+		return nil, fmt.Errorf("stop ID cannot be empty")
+	}
+
+	if strings.Contains(stopID, "_") {
+		stopOption, err := c.GetStopInfo(stopID)
+		if err != nil {
+			return nil, err
+		}
+		if stopOption != nil {
+			return []models.StopOption{*stopOption}, nil
+		}
+		return []models.StopOption{}, nil
+	}
+
+	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
+	
+	// Use a channel to collect results and limit concurrency
+	semaphore := make(chan struct{}, maxConcurrentRequests)
+	resultChan := make(chan *models.StopOption, len(agencies))
+	var wg sync.WaitGroup
+
+	for _, agency := range agencies {
+		wg.Add(1)
+		go func(agencyID string) {
+			defer wg.Done()
+			
+			// Acquire semaphore with panic recovery
+			semaphore <- struct{}{}
+			defer func() {
+				if r := recover(); r != nil {
+					<-semaphore
+					panic(r)
+				}
+				<-semaphore
+			}()
+			
+			fullStopID := fmt.Sprintf("%s_%s", agencyID, stopID)
+			stopOption, err := c.GetStopInfo(fullStopID)
+			if err == nil && stopOption != nil {
+				resultChan <- stopOption
+			} else {
+				resultChan <- nil
+			}
+		}(agency)
+	}
+
+	// Close result channel when all goroutines complete or timeout
+	go func() {
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+		
+		select {
+		case <-done:
+			close(resultChan)
+		case <-time.After(apiTimeoutSeconds * time.Second):
+			close(resultChan)
+		}
+	}()
+
+	// Collect results
+	var matchingStops []models.StopOption
+	for stopOption := range resultChan {
+		if stopOption != nil {
+			matchingStops = append(matchingStops, *stopOption)
+		}
+	}
+
+	return matchingStops, nil
+}
+
+func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, error) {
+	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
+	
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Add("key", c.APIKey)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var stopResp struct {
+		Data struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		} `json:"data"`
+		Code int    `json:"code"`
+		Text string `json:"text"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&stopResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if stopResp.Code != 200 {
+		return nil, fmt.Errorf("API error: %s (code %d)", stopResp.Text, stopResp.Code)
+	}
+
+	agencyName := c.getAgencyNameFromID(fullStopID, stopResp.Data.References.Agencies)
+	
+	return &models.StopOption{
+		FullStopID:  fullStopID,
+		AgencyName:  agencyName,
+		StopName:    stopResp.Data.Entry.Name,
+		DisplayText: fmt.Sprintf("%s: %s", agencyName, stopResp.Data.Entry.Name),
+	}, nil
+}
+
+func (c *OneBusAwayClient) getAgencyNameFromID(stopID string, agencies []struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}) string {
+	parts := strings.Split(stopID, "_")
+	if len(parts) < 2 {
+		return "Unknown"
+	}
+	
+	agencyID := parts[0]
+	
+	for _, agency := range agencies {
+		if agency.ID == agencyID {
+			return agency.Name
+		}
+	}
+
+	switch agencyID {
+	case "1":
+		return "King County Metro"
+	case "40":
+		return "Sound Transit"
+	case "29":
+		return "Pierce Transit"
+	case "95":
+		return "Community Transit"
+	case "97":
+		return "Kitsap Transit"
+	case "98":
+		return "Everett Transit"
+	case "3":
+		return "Washington State Ferries"
+	case "23":
+		return "Other Agency"
+	default:
+		return fmt.Sprintf("Agency %s", agencyID)
+	}
 }
 
 func (c *OneBusAwayClient) stopExists(stopID string) bool {

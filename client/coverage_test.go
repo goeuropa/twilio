@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -336,4 +338,357 @@ func TestCalculateCoverageArea_EmptyAgencies(t *testing.T) {
 	assert.Equal(t, 47.6062, coverage.CenterLat)
 	assert.Equal(t, -122.3321, coverage.CenterLon)
 	assert.Equal(t, 25000.0, coverage.Radius)
+}
+
+func TestFindAllMatchingStops_SingleMatch(t *testing.T) {
+	mockStopResp := struct {
+		Data struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		} `json:"data"`
+		Code int    `json:"code"`
+		Text string `json:"text"`
+	}{
+		Data: struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		}{
+			Entry: struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{
+				ID:   "1_12345",
+				Name: "Test Stop",
+			},
+			References: struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			}{
+				Agencies: []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				}{
+					{ID: "1", Name: "King County Metro"},
+				},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockStopResp)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	stops, err := client.FindAllMatchingStops("12345")
+	assert.NoError(t, err)
+	assert.Len(t, stops, 1)
+	assert.Equal(t, "1_12345", stops[0].FullStopID)
+	assert.Equal(t, "King County Metro", stops[0].AgencyName)
+	assert.Equal(t, "Test Stop", stops[0].StopName)
+}
+
+func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
+	mockStopResp1 := struct {
+		Data struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		} `json:"data"`
+		Code int    `json:"code"`
+		Text string `json:"text"`
+	}{
+		Data: struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		}{
+			Entry: struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{
+				ID:   "1_12345",
+				Name: "Pine St & 3rd Ave",
+			},
+			References: struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			}{
+				Agencies: []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				}{
+					{ID: "1", Name: "King County Metro"},
+				},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
+	mockStopResp2 := struct {
+		Data struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		} `json:"data"`
+		Code int    `json:"code"`
+		Text string `json:"text"`
+	}{
+		Data: struct {
+			Entry struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"entry"`
+			References struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			} `json:"references"`
+		}{
+			Entry: struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{
+				ID:   "40_12345",
+				Name: "University Street Station",
+			},
+			References: struct {
+				Agencies []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"agencies"`
+			}{
+				Agencies: []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				}{
+					{ID: "40", Name: "Sound Transit"},
+				},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockStopResp1)
+		} else if strings.Contains(r.URL.Path, "/api/where/stop/40_12345.json") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockStopResp2)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	stops, err := client.FindAllMatchingStops("12345")
+	assert.NoError(t, err)
+	assert.Len(t, stops, 2)
+	
+	// Results may come back in different order due to concurrent requests
+	foundMetro := false
+	foundSoundTransit := false
+	
+	for _, stop := range stops {
+		if stop.FullStopID == "1_12345" {
+			assert.Equal(t, "King County Metro", stop.AgencyName)
+			assert.Equal(t, "Pine St & 3rd Ave", stop.StopName)
+			foundMetro = true
+		} else if stop.FullStopID == "40_12345" {
+			assert.Equal(t, "Sound Transit", stop.AgencyName)
+			assert.Equal(t, "University Street Station", stop.StopName)
+			foundSoundTransit = true
+		}
+	}
+	
+	assert.True(t, foundMetro, "Should find Metro stop")
+	assert.True(t, foundSoundTransit, "Should find Sound Transit stop")
+}
+
+func TestGetAgencyNameFromID(t *testing.T) {
+	client := NewOneBusAwayClient("test", "test")
+	
+	tests := []struct {
+		stopID   string
+		agencies []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		expected string
+	}{
+		{
+			stopID: "1_12345",
+			agencies: []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{
+				{ID: "1", Name: "King County Metro"},
+			},
+			expected: "King County Metro",
+		},
+		{
+			stopID:   "40_12345",
+			agencies: []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{},
+			expected: "Sound Transit",
+		},
+		{
+			stopID:   "invalid",
+			agencies: []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{},
+			expected: "Unknown",
+		},
+		{
+			stopID:   "99_12345",
+			agencies: []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}{},
+			expected: "Agency 99",
+		},
+	}
+
+	for _, tt := range tests {
+		result := client.getAgencyNameFromID(tt.stopID, tt.agencies)
+		assert.Equal(t, tt.expected, result)
+	}
+}
+
+func TestFindAllMatchingStops_Timeout(t *testing.T) {
+	// Create a server that delays responses beyond the timeout
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Sleep longer than the API timeout to trigger timeout mechanism
+		time.Sleep(35 * time.Second) // apiTimeoutSeconds = 30
+		
+		mockStopResp := struct {
+			Data struct {
+				Entry struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"entry"`
+				References struct {
+					Agencies []struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"agencies"`
+				} `json:"references"`
+			} `json:"data"`
+			Code int    `json:"code"`
+			Text string `json:"text"`
+		}{
+			Data: struct {
+				Entry struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"entry"`
+				References struct {
+					Agencies []struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"agencies"`
+				} `json:"references"`
+			}{
+				Entry: struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				}{
+					ID:   "1_12345",
+					Name: "Test Stop",
+				},
+				References: struct {
+					Agencies []struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"agencies"`
+				}{
+					Agencies: []struct {
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					}{
+						{ID: "1", Name: "Test Agency"},
+					},
+				},
+			},
+			Code: 200,
+			Text: "OK",
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockStopResp)
+	}))
+	defer server.Close()
+
+	client := NewOneBusAwayClient(server.URL, "test-key")
+	
+	// This test should complete quickly due to timeout mechanism
+	// even though the server would take 35 seconds to respond
+	start := time.Now()
+	stops, err := client.FindAllMatchingStops("12345")
+	duration := time.Since(start)
+	
+	// Should complete within reasonable time due to timeout
+	assert.Less(t, duration, 32*time.Second, "FindAllMatchingStops should timeout after ~30 seconds")
+	
+	// Should return empty results due to timeout
+	assert.NoError(t, err)
+	assert.Empty(t, stops, "Should return empty results when timing out")
 }

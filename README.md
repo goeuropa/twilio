@@ -6,6 +6,7 @@ A Go web application that bridges Twilio SMS and voice services with OneBusAway 
 
 - **SMS Support**: Text a stop ID to get real-time arrival information
 - **Voice/IVR Support**: Call and enter stop ID via keypad for spoken arrivals
+- **Smart Stop Disambiguation**: Detects multiple stops with same ID and asks user to choose
 - **Automatic Stop Resolution**: Handles both numeric stop IDs (e.g., `75403`) and full agency IDs (e.g., `1_75403`)
 - **Multi-Server Support**: Configurable to work with any OneBusAway server deployment
 - **Dynamic Coverage Detection**: Automatically detects server coverage area at startup
@@ -36,8 +37,10 @@ oba-twilio/
 │   └── onebusaway_test.go    # Client unit tests
 │
 ├── handlers/
-│   ├── sms.go                # Twilio SMS webhook handler
-│   └── voice.go              # Twilio voice/IVR webhook handlers
+│   ├── sms.go                # Twilio SMS webhook handler with disambiguation
+│   ├── voice.go              # Twilio voice/IVR webhook handlers
+│   ├── session_store.go      # In-memory session management for disambiguation
+│   └── disambiguation_test.go # Tests for stop disambiguation logic
 │
 └── formatters/
     ├── response.go           # TwiML generation and text formatting
@@ -148,6 +151,8 @@ go test .               # Test main application logic
 - `InitializeCoverage()` - Fetches server coverage area at startup
 - `GetCoverageArea()` - Returns calculated center point and radius
 - `SearchStops(query)` - Searches stops using dynamic geographic bounds
+- `FindAllMatchingStops(stopID)` - Finds all stops matching a numeric ID across agencies
+- `GetStopInfo(fullStopID)` - Gets detailed information for a specific stop
 
 ## 💬 Usage Examples
 
@@ -157,12 +162,29 @@ Send an SMS to your Twilio number with a stop ID:
 
 **Input**: `75403`
 
-**Response**:
+**Response** (if single stop found):
 ```
 Stop: Pine St & 3rd Ave
 Route 45 to Loyal Heights Greenwood: 2 min
 Route 372 to U-District Station: 11 min
 Route 67 to Northgate Station Roosevelt Station: 14 min
+```
+
+**Response** (if multiple stops found):
+```
+Multiple stops found for 1234:
+1) King County Metro: Pine St & 3rd Ave
+2) Sound Transit: University Street Station
+Reply with the number to choose.
+```
+
+**Follow-up**: User texts `2`
+
+**Response**:
+```
+Stop: University Street Station
+Route Link to SeaTac Airport: 3 min
+Route Link to Northgate: 8 min
 ```
 
 ### Voice Usage
@@ -239,20 +261,7 @@ The app automatically resolves stop IDs by trying different agency prefixes. The
 - Input: `75403` → Tries `1_75403`, `40_75403`, `29_75403`, etc.
 - Input: `1_75403` → Uses as-is (already has agency prefix)
 
-**Default Agency Prefixes** (optimized for Puget Sound):
-- `1_` - King County Metro (Seattle area)
-- `40_` - Sound Transit (regional rail/BRT)
-- `29_` - Pierce Transit (Tacoma area)
-- `95_` - Community Transit (Snohomish County)
-- `97_` - Kitsap Transit (Kitsap County)
-- `98_` - Everett Transit (Everett)
-- `3_` - Washington State Ferries
-- `23_` - Other regional agencies
-
-**Note**: Different OneBusAway servers may use different agency ID schemes. For example:
-- Tampa: HART uses different agency IDs
-- Davis: Unitrans uses different agency IDs
-- Atlanta: MARTA and regional agencies use different schemes
+**Note**: Different OneBusAway servers use different agency ID schemes.
 
 The app will attempt all prefixes and return the first successful match, making it flexible across different deployments.
 
@@ -385,6 +394,17 @@ CMD ["./oba-twilio"]
 - **Solution**: App will continue with limited stop search functionality
 - **Example**: `Warning: Failed to initialize coverage area: API returned status 401`
 - **Workaround**: Use full stop IDs (with agency prefix) instead of stop name searches
+
+**9. Stop disambiguation not working**
+- **Cause**: Multiple stops exist with same ID but system returns first match
+- **Solution**: Check logs for "FindAllMatchingStops" calls
+- **Debug**: Test with known conflicting stop IDs like transit station stops
+- **Example**: Try stop IDs that exist in both Metro (1_) and Sound Transit (40_) systems
+
+**10. Session timeouts for disambiguation**
+- **Cause**: User doesn't respond to disambiguation choice within 10 minutes
+- **Solution**: App automatically clears old sessions, user needs to send stop ID again
+- **Prevention**: Respond to disambiguation messages promptly
 
 ### Debug Mode
 

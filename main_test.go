@@ -49,6 +49,19 @@ func (m *MockOneBusAwayClient) GetCoverageArea() *models.CoverageArea {
 	return args.Get(0).(*models.CoverageArea)
 }
 
+func (m *MockOneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
+	args := m.Called(stopID)
+	return args.Get(0).([]models.StopOption), args.Error(1)
+}
+
+func (m *MockOneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, error) {
+	args := m.Called(fullStopID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.StopOption), args.Error(1)
+}
+
 func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
 	gin.SetMode(gin.TestMode)
 
@@ -138,7 +151,17 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 		},
 	}
 
-	mockClient.On("GetArrivalsAndDepartures", "75403").Return(mockResponse, nil)
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_75403",
+			AgencyName:  "King County Metro", 
+			StopName:    "Test Stop",
+			DisplayText: "King County Metro: Test Stop",
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "75403").Return(mockStopOptions, nil)
+	mockClient.On("GetArrivalsAndDepartures", "1_75403").Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
 
 	form := url.Values{}

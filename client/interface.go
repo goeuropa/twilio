@@ -8,4 +8,6 @@ type OneBusAwayClientInterface interface {
 	SearchStops(query string) ([]models.Stop, error)
 	InitializeCoverage() error
 	GetCoverageArea() *models.CoverageArea
+	FindAllMatchingStops(stopID string) ([]models.StopOption, error)
+	GetStopInfo(fullStopID string) (*models.StopOption, error)
 }

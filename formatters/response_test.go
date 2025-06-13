@@ -166,3 +166,93 @@ func TestFormatArrivalTimeVoice(t *testing.T) {
 		assert.Equal(t, tt.expected, result)
 	}
 }
+
+func TestIsDisambiguationChoice(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"1", 1},
+		{"2", 2},
+		{"9", 9},
+		{"10", 10},
+		{"99", 99},
+		{"0", 0},
+		{"100", 0},
+		{"a", 0},
+		{"1a", 0},
+		{" 1 ", 1},
+		{" 10 ", 10},
+		{"", 0},
+		{"01", 1},  // Leading zero should still work
+		{"999999999999999999", 0}, // Overflow protection
+	}
+
+	for _, tt := range tests {
+		result := IsDisambiguationChoice(tt.input)
+		assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
+	}
+}
+
+func TestFormatDisambiguationMessage(t *testing.T) {
+	tests := []struct {
+		name         string
+		stopOptions  []models.StopOption
+		originalID   string
+		expectedContains []string
+	}{
+		{
+			name: "Multiple options",
+			stopOptions: []models.StopOption{
+				{
+					FullStopID:  "1_12345",
+					DisplayText: "King County Metro: Pine St & 3rd Ave",
+				},
+				{
+					FullStopID:  "40_12345",
+					DisplayText: "Sound Transit: University Street Station",
+				},
+			},
+			originalID: "12345",
+			expectedContains: []string{
+				"Multiple stops found for 12345",
+				"1) King County Metro: Pine St & 3rd Ave",
+				"2) Sound Transit: University Street Station",
+				"Reply with the number to choose",
+			},
+		},
+		{
+			name:        "No options",
+			stopOptions: []models.StopOption{},
+			originalID:  "99999",
+			expectedContains: []string{
+				"No stops found for ID 99999",
+			},
+		},
+		{
+			name: "Single option",
+			stopOptions: []models.StopOption{
+				{
+					FullStopID:  "1_12345",
+					DisplayText: "King County Metro: Pine St & 3rd Ave",
+				},
+			},
+			originalID: "12345",
+			expectedContains: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatDisambiguationMessage(tt.stopOptions, tt.originalID)
+			
+			if len(tt.stopOptions) == 1 {
+				assert.Empty(t, result)
+			} else {
+				for _, expected := range tt.expectedContains {
+					assert.Contains(t, result, expected)
+				}
+			}
+		})
+	}
+}

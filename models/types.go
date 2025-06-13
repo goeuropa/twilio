@@ -7,6 +7,18 @@ type TwilioSMSRequest struct {
 	MessageSid string `form:"MessageSid" json:"MessageSid"`
 }
 
+type DisambiguationSession struct {
+	StopOptions []StopOption `json:"stopOptions"`
+	CreatedAt   int64        `json:"createdAt"`
+}
+
+type StopOption struct {
+	FullStopID  string `json:"fullStopId"`
+	AgencyName  string `json:"agencyName"`
+	StopName    string `json:"stopName"`
+	DisplayText string `json:"displayText"`
+}
+
 type TwilioVoiceRequest struct {
 	From    string `form:"From" json:"From"`
 	To      string `form:"To" json:"To"`

@@ -1,0 +1,444 @@
+package handlers
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"oba-twilio/models"
+)
+
+type MockOneBusAwayClientDisambiguation struct {
+	mock.Mock
+}
+
+func (m *MockOneBusAwayClientDisambiguation) GetArrivalsAndDepartures(stopID string) (*models.OneBusAwayResponse, error) {
+	args := m.Called(stopID)
+	return args.Get(0).(*models.OneBusAwayResponse), args.Error(1)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
+	args := m.Called(resp)
+	return args.Get(0).([]models.Arrival)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) SearchStops(query string) ([]models.Stop, error) {
+	args := m.Called(query)
+	return args.Get(0).([]models.Stop), args.Error(1)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) InitializeCoverage() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) GetCoverageArea() *models.CoverageArea {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*models.CoverageArea)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
+	args := m.Called(stopID)
+	return args.Get(0).([]models.StopOption), args.Error(1)
+}
+
+func (m *MockOneBusAwayClientDisambiguation) GetStopInfo(fullStopID string) (*models.StopOption, error) {
+	args := m.Called(fullStopID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.StopOption), args.Error(1)
+}
+
+func setupDisambiguationTestRouter() (*gin.Engine, *MockOneBusAwayClientDisambiguation, *SMSHandler) {
+	gin.SetMode(gin.TestMode)
+	
+	mockClient := &MockOneBusAwayClientDisambiguation{}
+	smsHandler := NewSMSHandler(mockClient)
+	
+	r := gin.New()
+	r.POST("/sms", smsHandler.HandleSMS)
+	
+	return r, mockClient, smsHandler
+}
+
+func TestSMSHandler_SingleStopFound(t *testing.T) {
+	r, mockClient, _ := setupDisambiguationTestRouter()
+
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_12345",
+			AgencyName:  "King County Metro",
+			StopName:    "Test Stop",
+			DisplayText: "King County Metro: Test Stop",
+		},
+	}
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			}{
+				Stop: struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				}{
+					Name: "Test Stop",
+				},
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:       "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
+	mockClient.On("GetArrivalsAndDepartures", "1_12345").Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Body", "12345")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/sms", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Test Stop")
+	assert.Contains(t, w.Body.String(), "Route 8")
+	mockClient.AssertExpectations(t)
+}
+
+func TestSMSHandler_MultipleStopsFound_Disambiguation(t *testing.T) {
+	r, mockClient, _ := setupDisambiguationTestRouter()
+
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_12345",
+			AgencyName:  "King County Metro",
+			StopName:    "Pine St & 3rd Ave",
+			DisplayText: "King County Metro: Pine St & 3rd Ave",
+		},
+		{
+			FullStopID:  "40_12345",
+			AgencyName:  "Sound Transit",
+			StopName:    "University Street Station",
+			DisplayText: "Sound Transit: University Street Station",
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Body", "12345")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/sms", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "Multiple stops found for 12345")
+	assert.Contains(t, body, "1) King County Metro: Pine St &amp; 3rd Ave")
+	assert.Contains(t, body, "2) Sound Transit: University Street Station")
+	assert.Contains(t, body, "Reply with the number to choose")
+	mockClient.AssertExpectations(t)
+}
+
+func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
+	r, mockClient, smsHandler := setupDisambiguationTestRouter()
+
+	// Set up disambiguation session
+	stopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_12345",
+			AgencyName:  "King County Metro",
+			StopName:    "Pine St & 3rd Ave",
+			DisplayText: "King County Metro: Pine St & 3rd Ave",
+		},
+		{
+			FullStopID:  "40_12345",
+			AgencyName:  "Sound Transit",
+			StopName:    "University Street Station",
+			DisplayText: "Sound Transit: University Street Station",
+		},
+	}
+
+	session := &models.DisambiguationSession{
+		StopOptions: stopOptions,
+	}
+	smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName        string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				Stop struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				} `json:"stop"`
+			}{
+				Stop: struct {
+					ID        string  `json:"id"`
+					Name      string  `json:"name"`
+					Direction string  `json:"direction"`
+					Lat       float64 `json:"lat"`
+					Lon       float64 `json:"lon"`
+				}{
+					Name: "University Street Station",
+				},
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "Link",
+			TripHeadsign:       "SeaTac Airport",
+			MinutesUntilArrival: 3,
+		},
+	}
+
+	mockClient.On("GetArrivalsAndDepartures", "40_12345").Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Body", "2")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/sms", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "University Street Station")
+	assert.Contains(t, w.Body.String(), "Route Link")
+	mockClient.AssertExpectations(t)
+}
+
+func TestSMSHandler_DisambiguationChoice_Invalid(t *testing.T) {
+	r, _, smsHandler := setupDisambiguationTestRouter()
+
+	// Set up disambiguation session with 2 options
+	stopOptions := []models.StopOption{
+		{FullStopID: "1_12345", DisplayText: "Option 1"},
+		{FullStopID: "40_12345", DisplayText: "Option 2"},
+	}
+
+	session := &models.DisambiguationSession{
+		StopOptions: stopOptions,
+	}
+	smsHandler.SessionStore.SetDisambiguationSession("+14444444444", session)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Body", "3")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/sms", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Please choose a number between 1 and 2")
+}
+
+func TestSMSHandler_DisambiguationChoice_NoSession(t *testing.T) {
+	r, _, _ := setupDisambiguationTestRouter()
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Body", "1")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/sms", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "No active selection")
+}
+
+func TestSessionStore_SetAndGet(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+	
+	session := &models.DisambiguationSession{
+		StopOptions: []models.StopOption{
+			{FullStopID: "1_12345", DisplayText: "Test Stop"},
+		},
+	}
+	
+	store.SetDisambiguationSession("+14444444444", session)
+	
+	retrieved := store.GetDisambiguationSession("+14444444444")
+	assert.NotNil(t, retrieved)
+	assert.Len(t, retrieved.StopOptions, 1)
+	assert.Equal(t, "1_12345", retrieved.StopOptions[0].FullStopID)
+}
+
+func TestSessionStore_Clear(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+	
+	session := &models.DisambiguationSession{
+		StopOptions: []models.StopOption{
+			{FullStopID: "1_12345", DisplayText: "Test Stop"},
+		},
+	}
+	
+	store.SetDisambiguationSession("+14444444444", session)
+	store.ClearDisambiguationSession("+14444444444")
+	
+	retrieved := store.GetDisambiguationSession("+14444444444")
+	assert.Nil(t, retrieved)
+}
+
+func TestSessionStore_ConcurrentAccess(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+	
+	session := &models.DisambiguationSession{
+		StopOptions: []models.StopOption{
+			{FullStopID: "1_12345", DisplayText: "Test Stop"},
+		},
+	}
+	
+	const numGoroutines = 100
+	const phoneNumber = "+14444444444"
+	
+	// Test concurrent reads and writes
+	done := make(chan bool, numGoroutines*2)
+	
+	// Writers
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			store.SetDisambiguationSession(phoneNumber, session)
+			done <- true
+		}()
+	}
+	
+	// Readers
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			store.GetDisambiguationSession(phoneNumber)
+			done <- true
+		}()
+	}
+	
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines*2; i++ {
+		<-done
+	}
+	
+	// Should still be able to get the session
+	retrieved := store.GetDisambiguationSession(phoneNumber)
+	assert.NotNil(t, retrieved)
+}
+
+func TestSessionStore_ProperCleanup(t *testing.T) {
+	store := NewSessionStore()
+	
+	// Add a session that should be cleaned up - we'll manipulate it after setting
+	session := &models.DisambiguationSession{
+		StopOptions: []models.StopOption{
+			{FullStopID: "1_12345", DisplayText: "Test Stop"},
+		},
+	}
+	
+	store.SetDisambiguationSession("+14444444444", session)
+	
+	// Manually expire the session by manipulating the internal state
+	store.mutex.Lock()
+	if storedSession, exists := store.sessions["+14444444444"]; exists {
+		storedSession.CreatedAt = time.Now().Unix() - (sessionTimeoutMinutes+1)*60
+	}
+	store.mutex.Unlock()
+	
+	// Getting expired session should return nil and clean it up
+	retrieved := store.GetDisambiguationSession("+14444444444")
+	assert.Nil(t, retrieved)
+	
+	store.Close()
+}
