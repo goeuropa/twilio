@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,9 +13,10 @@ import (
 )
 
 type OneBusAwayClient struct {
-	BaseURL string
-	APIKey  string
-	Client  *http.Client
+	BaseURL      string
+	APIKey       string
+	Client       *http.Client
+	coverageArea *models.CoverageArea
 }
 
 func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
@@ -25,6 +27,135 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+func (c *OneBusAwayClient) InitializeCoverage() error {
+	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
+	
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Add("key", c.APIKey)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var coverageResp models.AgenciesWithCoverageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&coverageResp); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if coverageResp.Code != 200 {
+		return fmt.Errorf("API error: %s (code %d)", coverageResp.Text, coverageResp.Code)
+	}
+
+	if len(coverageResp.Data.List) == 0 {
+		return fmt.Errorf("no coverage areas found")
+	}
+
+	c.coverageArea = c.calculateCoverageArea(coverageResp.Data.List)
+	return nil
+}
+
+func (c *OneBusAwayClient) GetCoverageArea() *models.CoverageArea {
+	return c.coverageArea
+}
+
+func (c *OneBusAwayClient) calculateCoverageArea(agencies []struct {
+	AgencyID string  `json:"agencyId"`
+	Lat      float64 `json:"lat"`
+	LatSpan  float64 `json:"latSpan"`
+	Lon      float64 `json:"lon"`
+	LonSpan  float64 `json:"lonSpan"`
+}) *models.CoverageArea {
+	if len(agencies) == 0 {
+		return &models.CoverageArea{
+			CenterLat: 47.6062,
+			CenterLon: -122.3321,
+			Radius:    25000,
+		}
+	}
+
+	var minLat, maxLat, minLon, maxLon float64
+	first := true
+
+	for _, agency := range agencies {
+		agencyMinLat := agency.Lat - agency.LatSpan/2
+		agencyMaxLat := agency.Lat + agency.LatSpan/2
+		agencyMinLon := agency.Lon - agency.LonSpan/2
+		agencyMaxLon := agency.Lon + agency.LonSpan/2
+
+		if first {
+			minLat, maxLat = agencyMinLat, agencyMaxLat
+			minLon, maxLon = agencyMinLon, agencyMaxLon
+			first = false
+		} else {
+			if agencyMinLat < minLat {
+				minLat = agencyMinLat
+			}
+			if agencyMaxLat > maxLat {
+				maxLat = agencyMaxLat
+			}
+			if agencyMinLon < minLon {
+				minLon = agencyMinLon
+			}
+			if agencyMaxLon > maxLon {
+				maxLon = agencyMaxLon
+			}
+		}
+	}
+
+	centerLat := (minLat + maxLat) / 2
+	centerLon := (minLon + maxLon) / 2
+
+	latSpan := maxLat - minLat
+	lonSpan := maxLon - minLon
+
+	radius := c.calculateRadius(latSpan, lonSpan, centerLat)
+
+	return &models.CoverageArea{
+		CenterLat: centerLat,
+		CenterLon: centerLon,
+		Radius:    radius,
+	}
+}
+
+func (c *OneBusAwayClient) calculateRadius(latSpan, lonSpan, centerLat float64) float64 {
+	const earthRadiusMeters = 6371000
+
+	latRadians := latSpan * math.Pi / 180
+	lonRadians := lonSpan * math.Pi / 180
+	centerLatRadians := centerLat * math.Pi / 180
+
+	latDistanceMeters := latRadians * earthRadiusMeters
+	lonDistanceMeters := lonRadians * earthRadiusMeters * math.Cos(centerLatRadians)
+
+	maxDistance := math.Max(latDistanceMeters, lonDistanceMeters)
+
+	radius := maxDistance / 2
+
+	const minRadius = 5000
+	const maxRadius = 100000
+
+	if radius < minRadius {
+		return minRadius
+	}
+	if radius > maxRadius {
+		return maxRadius
+	}
+
+	return radius
 }
 
 func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneBusAwayResponse, error) {
@@ -112,6 +243,11 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 }
 
 func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
+	coverage := c.GetCoverageArea()
+	if coverage == nil {
+		return nil, fmt.Errorf("coverage area not initialized - call InitializeCoverage() first")
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/stops-for-location.json", c.BaseURL)
 	
 	req, err := http.NewRequest("GET", endpoint, nil)
@@ -121,9 +257,9 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
-	q.Add("lat", "47.6062")
-	q.Add("lon", "-122.3321")
-	q.Add("radius", "50000")
+	q.Add("lat", fmt.Sprintf("%.6f", coverage.CenterLat))
+	q.Add("lon", fmt.Sprintf("%.6f", coverage.CenterLon))
+	q.Add("radius", fmt.Sprintf("%.0f", coverage.Radius))
 	q.Add("query", query)
 	req.URL.RawQuery = q.Encode()
 
@@ -133,9 +269,17 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
 	var stopData models.StopData
 	if err := json.NewDecoder(resp.Body).Decode(&stopData); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if stopData.Code != 200 {
+		return nil, fmt.Errorf("API error: %s (code %d)", stopData.Text, stopData.Code)
 	}
 
 	stops := make([]models.Stop, len(stopData.Data.List))

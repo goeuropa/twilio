@@ -36,6 +36,19 @@ func (m *MockOneBusAwayClient) SearchStops(query string) ([]models.Stop, error) 
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
 
+func (m *MockOneBusAwayClient) InitializeCoverage() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockOneBusAwayClient) GetCoverageArea() *models.CoverageArea {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*models.CoverageArea)
+}
+
 func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
 	gin.SetMode(gin.TestMode)
 

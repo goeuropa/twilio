@@ -50,6 +50,31 @@ func TestResolveStopID(t *testing.T) {
 }
 
 func TestGetArrivalsAndDepartures_Success(t *testing.T) {
+	mockCoverage := models.AgenciesWithCoverageResponse{
+		Data: struct {
+			LimitExceeded bool `json:"limitExceeded"`
+			List []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			} `json:"list"`
+		}{
+			List: []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			}{
+				{AgencyID: "test", Lat: 47.6, LatSpan: 0.5, Lon: -122.3, LonSpan: 0.8},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
 	mockResponse := models.OneBusAwayResponse{
 		Data: struct {
 			Entry struct {
@@ -117,7 +142,10 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "arrivals-and-departures-for-stop") {
+		if strings.Contains(r.URL.Path, "agencies-with-coverage") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockCoverage)
+		} else if strings.Contains(r.URL.Path, "arrivals-and-departures-for-stop") {
 			assert.Equal(t, "test-key", r.URL.Query().Get("key"))
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(mockResponse)

@@ -68,6 +68,27 @@ type StopData struct {
 	Text string `json:"text"`
 }
 
+type AgenciesWithCoverageResponse struct {
+	Data struct {
+		LimitExceeded bool `json:"limitExceeded"`
+		List []struct {
+			AgencyID string  `json:"agencyId"`
+			Lat      float64 `json:"lat"`
+			LatSpan  float64 `json:"latSpan"`
+			Lon      float64 `json:"lon"`
+			LonSpan  float64 `json:"lonSpan"`
+		} `json:"list"`
+	} `json:"data"`
+	Code int    `json:"code"`
+	Text string `json:"text"`
+}
+
+type CoverageArea struct {
+	CenterLat float64
+	CenterLon float64
+	Radius    float64
+}
+
 type TwiMLResponse struct {
 	XMLName string `xml:"Response"`
 	Say     string `xml:"Say,omitempty"`

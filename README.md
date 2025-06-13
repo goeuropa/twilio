@@ -8,7 +8,9 @@ A Go web application that bridges Twilio SMS and voice services with OneBusAway 
 - **Voice/IVR Support**: Call and enter stop ID via keypad for spoken arrivals
 - **Automatic Stop Resolution**: Handles both numeric stop IDs (e.g., `75403`) and full agency IDs (e.g., `1_75403`)
 - **Multi-Server Support**: Configurable to work with any OneBusAway server deployment
+- **Dynamic Coverage Detection**: Automatically detects server coverage area at startup
 - **Multi-Agency Support**: Works with multiple transit agencies within a region
+- **Intelligent Stop Search**: Uses server-specific geographic bounds for stop searching
 - **Real-time Data**: Fetches live arrival predictions from OneBusAway API
 - **Production Ready**: Comprehensive error handling, logging, and health checks
 
@@ -30,6 +32,7 @@ oba-twilio/
 ├── client/
 │   ├── interface.go           # OneBusAway client interface (for testing)
 │   ├── onebusaway.go         # OneBusAway API client implementation
+│   ├── coverage_test.go      # Coverage area calculation tests
 │   └── onebusaway_test.go    # Client unit tests
 │
 ├── handlers/
@@ -89,10 +92,17 @@ go run main.go
 
 The server will start on port 8080 by default. You should see:
 ```
-2025/06/13 09:00:14 Starting server on port 8080
-2025/06/13 09:00:14 OneBusAway API: https://api.pugetsound.onebusaway.org
+2025/06/13 12:02:45 Initializing coverage area for OneBusAway server...
+2025/06/13 12:02:45 Coverage area initialized: center=(47.7655,-122.3079), radius=92564m
+2025/06/13 12:02:45 Starting server on port 8080
+2025/06/13 12:02:45 OneBusAway API: https://api.pugetsound.onebusaway.org
 [GIN-debug] Listening and serving HTTP on :8080
 ```
+
+The coverage area initialization shows:
+- **Center coordinates**: Geographic center of all transit agencies
+- **Radius**: Calculated search radius in meters for stop queries
+- **Automatic fallback**: If initialization fails, the app continues with limited functionality
 
 ## 🧪 Testing
 
@@ -127,12 +137,17 @@ go test .               # Test main application logic
 
 ### Health Check
 - **GET** `/health` - Returns server health status
-- **GET** `/` - Returns application info
+- **GET** `/` - Returns application info and coverage area status
 
 ### Twilio Webhooks
 - **POST** `/sms` - Handle incoming SMS messages
 - **POST** `/voice` - Handle incoming voice calls (initial menu)
 - **POST** `/voice/input` - Handle voice input (DTMF digits)
+
+### Internal API Methods (OneBusAway Client)
+- `InitializeCoverage()` - Fetches server coverage area at startup
+- `GetCoverageArea()` - Returns calculated center point and radius
+- `SearchStops(query)` - Searches stops using dynamic geographic bounds
 
 ## 💬 Usage Examples
 
@@ -364,6 +379,12 @@ CMD ["./oba-twilio"]
   curl https://api.tampa.onebusaway.org/api/where/agencies-with-coverage.json?key=test
   ```
 - **Debugging**: Look for `"id"` fields in the agency response to understand the prefix scheme
+
+**8. "Coverage area initialization failed"**
+- **Cause**: Server doesn't support agencies-with-coverage endpoint or API key issues
+- **Solution**: App will continue with limited stop search functionality
+- **Example**: `Warning: Failed to initialize coverage area: API returned status 401`
+- **Workaround**: Use full stop IDs (with agency prefix) instead of stop name searches
 
 ### Debug Mode
 
