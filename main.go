@@ -23,7 +23,7 @@ func main() {
 
 	obaAPIKey := os.Getenv("ONEBUSAWAY_API_KEY")
 	if obaAPIKey == "" {
-		obaAPIKey = "org.onebusaway.iphone"
+		obaAPIKey = "test"
 	}
 
 	obaBaseURL := os.Getenv("ONEBUSAWAY_BASE_URL")
@@ -56,7 +56,7 @@ func main() {
 
 	log.Printf("Starting server on port %s", port)
 	log.Printf("OneBusAway API: %s", obaBaseURL)
-	
+
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}

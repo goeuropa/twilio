@@ -7,7 +7,8 @@ A Go web application that bridges Twilio SMS and voice services with OneBusAway 
 - **SMS Support**: Text a stop ID to get real-time arrival information
 - **Voice/IVR Support**: Call and enter stop ID via keypad for spoken arrivals
 - **Automatic Stop Resolution**: Handles both numeric stop IDs (e.g., `75403`) and full agency IDs (e.g., `1_75403`)
-- **Multi-Agency Support**: Works with all Puget Sound area transit agencies
+- **Multi-Server Support**: Configurable to work with any OneBusAway server deployment
+- **Multi-Agency Support**: Works with multiple transit agencies within a region
 - **Real-time Data**: Fetches live arrival predictions from OneBusAway API
 - **Production Ready**: Comprehensive error handling, logging, and health checks
 
@@ -64,7 +65,9 @@ oba-twilio/
 3. **Set up environment** (optional):
    ```bash
    cp .env.example .env
-   # Edit .env with your preferred settings
+   # Edit .env to configure your OneBusAway server and settings
+   # Default: Puget Sound (Seattle area)
+   # See "Supported OneBusAway Servers" section for other options
    ```
 
 4. **Build the application**:
@@ -187,31 +190,91 @@ Create a `.env` file or set environment variables:
 # Server Configuration
 PORT=8080                    # Server port (default: 8080)
 
-# OneBusAway API
-ONEBUSAWAY_API_KEY=org.onebusaway.iphone           # API key (default provided)
-ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org  # API base URL
+# OneBusAway API Configuration
+ONEBUSAWAY_API_KEY=test                                    # API key (default provided)
+ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org  # API base URL (default: Puget Sound)
 
 # Twilio (optional - for outbound features)
 TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 ```
 
+### Supported OneBusAway Servers
+
+The application can be configured to work with any OneBusAway server deployment by setting the `ONEBUSAWAY_BASE_URL` environment variable:
+
+| Region | Server URL | Coverage Area | Transit Agencies |
+|--------|------------|---------------|------------------|
+| **Puget Sound** (default) | `https://api.pugetsound.onebusaway.org` | Seattle, WA metro | King County Metro, Sound Transit, Pierce Transit, Community Transit, Kitsap Transit, Everett Transit, Washington State Ferries |
+| **Tampa** | `https://api.tampa.onebusaway.org` | Tampa Bay, FL | Hillsborough Area Regional Transit (HART) |
+| **Davis/UC Davis** | `https://api.unitrans.onebusawaycloud.com` | Davis, CA | Unitrans |
+| **Local Development** | `http://localhost:8080` | Your local setup | Custom GTFS data |
+
+**Example Configuration for Tampa**:
+```bash
+export ONEBUSAWAY_BASE_URL=https://api.tampa.onebusaway.org
+export ONEBUSAWAY_API_KEY=test
+go run main.go
+```
+
 ### Stop ID Resolution
 
-The app automatically resolves stop IDs by trying different agency prefixes:
+The app automatically resolves stop IDs by trying different agency prefixes. The prefixes used are optimized for the Puget Sound region by default, but work across different OneBusAway deployments:
 
 - Input: `75403` → Tries `1_75403`, `40_75403`, `29_75403`, etc.
 - Input: `1_75403` → Uses as-is (already has agency prefix)
 
-**Supported Agencies**:
-- `1_` - King County Metro
-- `40_` - Sound Transit
-- `29_` - Pierce Transit
-- `95_` - Community Transit
-- `97_` - Kitsap Transit
-- `98_` - Everett Transit
+**Default Agency Prefixes** (optimized for Puget Sound):
+- `1_` - King County Metro (Seattle area)
+- `40_` - Sound Transit (regional rail/BRT)
+- `29_` - Pierce Transit (Tacoma area)
+- `95_` - Community Transit (Snohomish County)
+- `97_` - Kitsap Transit (Kitsap County)
+- `98_` - Everett Transit (Everett)
 - `3_` - Washington State Ferries
 - `23_` - Other regional agencies
+
+**Note**: Different OneBusAway servers may use different agency ID schemes. For example:
+- Tampa: HART uses different agency IDs
+- Davis: Unitrans uses different agency IDs
+- Atlanta: MARTA and regional agencies use different schemes
+
+The app will attempt all prefixes and return the first successful match, making it flexible across different deployments.
+
+### Server Discovery
+
+To find available OneBusAway servers and their coverage areas:
+
+1. **OneBusAway Regions API**: `http://regions.onebusaway.org/regions-v3.json`
+2. **Test server connectivity**:
+   ```bash
+   curl https://api.pugetsound.onebusaway.org/api/where/agencies-with-coverage.json?key=test
+   ```
+3. **Check agency IDs for a server**:
+   ```bash
+   # Replace with your target server
+   curl https://api.tampa.onebusaway.org/api/where/agencies-with-coverage.json?key=test
+   ```
+
+### Testing Different Servers
+
+**Test Tampa server**:
+```bash
+export ONEBUSAWAY_BASE_URL=https://api.tampa.onebusaway.org
+go run main.go
+
+# Test with a Tampa stop ID (example)
+curl -X POST -d "From=%2B14444444444&Body=1234" http://localhost:8080/sms
+```
+
+**Test Unitrans server**:
+```bash
+export ONEBUSAWAY_BASE_URL=https://api.unitrans.onebusawaycloud.com
+go run main.go
+
+# Test with a Unitrans stop ID (example)
+curl -X POST -d "From=%2B14444444444&Body=22136" http://localhost:8080/sms
+```
 
 ## 🚀 Deployment
 
@@ -235,7 +298,7 @@ echo "web: ./oba-twilio" > Procfile
 
 # Deploy
 heroku create your-app-name
-heroku config:set ONEBUSAWAY_API_KEY=org.onebusaway.iphone
+heroku config:set ONEBUSAWAY_API_KEY=test
 git push heroku main
 ```
 
@@ -286,6 +349,21 @@ CMD ["./oba-twilio"]
 **5. XML parsing errors in Twilio**
 - **Cause**: Invalid TwiML response format
 - **Solution**: Check logs for malformed XML, ensure proper escaping
+
+**6. "API returned status 404" with different servers**
+- **Cause**: Server not responding or incorrect URL
+- **Solution**: Verify server URL and test connectivity:
+  ```bash
+  curl https://your-server.com/api/where/agencies-with-coverage.json?key=test
+  ```
+
+**7. Different agency ID schemes**
+- **Cause**: Each OneBusAway deployment uses different agency prefixes
+- **Solution**: Check agency IDs for your target server:
+  ```bash
+  curl https://api.tampa.onebusaway.org/api/where/agencies-with-coverage.json?key=test
+  ```
+- **Debugging**: Look for `"id"` fields in the agency response to understand the prefix scheme
 
 ### Debug Mode
 
@@ -340,8 +418,18 @@ This project is open source. See project repository for license details.
 
 ## 🔗 Related Links
 
+### OneBusAway Resources
 - [OneBusAway Developer API](https://developer.onebusaway.org/)
+- [OneBusAway Multi-Region Documentation](https://github.com/OneBusAway/onebusaway/wiki/Multi-Region)
+- [OneBusAway Server Directory](http://regions.onebusaway.org/regions-v3.json)
+- [OneBusAway Deployments](https://github.com/OneBusAway/onebusaway/wiki/OneBusAway-Deployments)
+
+### Regional OneBusAway Instances
+- [Puget Sound OneBusAway](https://pugetsound.onebusaway.org/) (Seattle area)
+- [Tampa OneBusAway](https://tampa.onebusaway.org/) (Tampa Bay area)
+- [OneBusAway Atlanta](https://atlanta.onebusaway.org/) (Atlanta metro)
+
+### Twilio & Development Resources
 - [Twilio SMS Webhooks](https://www.twilio.com/docs/messaging/guides/webhook-request)
 - [Twilio Voice TwiML](https://www.twilio.com/docs/voice/twiml)
 - [Gin Web Framework](https://gin-gonic.com/docs/)
-- [Puget Sound OneBusAway](https://pugetsound.onebusaway.org/)

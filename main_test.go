@@ -38,16 +38,16 @@ func (m *MockOneBusAwayClient) SearchStops(query string) ([]models.Stop, error) 
 
 func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
 	gin.SetMode(gin.TestMode)
-	
+
 	mockClient := &MockOneBusAwayClient{}
 	smsHandler := handlers.NewSMSHandler(mockClient)
 	voiceHandler := handlers.NewVoiceHandler(mockClient)
-	
+
 	r := gin.New()
 	r.POST("/sms", smsHandler.HandleSMS)
 	r.POST("/voice", voiceHandler.HandleVoiceStart)
 	r.POST("/voice/input", voiceHandler.HandleVoiceInput)
-	
+
 	return r, mockClient
 }
 
@@ -72,7 +72,7 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -89,7 +89,7 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -120,7 +120,7 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 	mockArrivals := []models.Arrival{
 		{
 			RouteShortName:      "8",
-			TripHeadsign:       "Seattle Center",
+			TripHeadsign:        "Seattle Center",
 			MinutesUntilArrival: 3,
 		},
 	}
@@ -189,7 +189,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -206,7 +206,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -237,7 +237,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 	mockArrivals := []models.Arrival{
 		{
 			RouteShortName:      "43",
-			TripHeadsign:       "Capitol Hill",
+			TripHeadsign:        "Capitol Hill",
 			MinutesUntilArrival: 5,
 		},
 	}
@@ -268,8 +268,8 @@ func TestOneBusAwayClient_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	client := client.NewOneBusAwayClient("https://api.pugetsound.onebusaway.org", "org.onebusaway.iphone")
-	
+	client := client.NewOneBusAwayClient("https://api.pugetsound.onebusaway.org", "test")
+
 	resp, err := client.GetArrivalsAndDepartures("1_75403")
 	if err != nil {
 		t.Logf("Integration test failed (this is expected if the API is down): %v", err)
