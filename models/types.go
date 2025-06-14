@@ -54,13 +54,7 @@ type OneBusAwayResponse struct {
 				ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 				Status               string `json:"status"`
 			} `json:"arrivalsAndDepartures"`
-			Stop struct {
-				ID        string  `json:"id"`
-				Name      string  `json:"name"`
-				Direction string  `json:"direction"`
-				Lat       float64 `json:"lat"`
-				Lon       float64 `json:"lon"`
-			} `json:"stop"`
+			StopId string `json:"stopId"`
 		} `json:"entry"`
 	} `json:"data"`
 	Code int    `json:"code"`

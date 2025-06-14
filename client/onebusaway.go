@@ -220,7 +220,8 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 	if obaResp.Code != 200 {
 		return nil, fmt.Errorf("API error: %s (code %d)", obaResp.Text, obaResp.Code)
 	}
-	if obaResp.Data.Entry.Stop.ID == "" {
+
+	if obaResp.Data.Entry.StopId == "" {
 		return nil, fmt.Errorf("invalid response: missing stop information")
 	}
 

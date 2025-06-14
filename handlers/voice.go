@@ -82,7 +82,7 @@ func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
-	stopName := obaResp.Data.Entry.Stop.Name
+	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME // obaResp.Data.Entry.Stop.Name
 
 	message := formatters.FormatVoiceResponse(arrivals, stopName)
 	
