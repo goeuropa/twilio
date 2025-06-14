@@ -34,12 +34,98 @@ const (
 
 	// maxCacheEntries limits the number of cached responses
 	maxCacheEntries = 1000
+
+	// Circuit breaker constants
+	circuitBreakerFailureThreshold = 5
+	circuitBreakerTimeout          = 60 * time.Second
+	circuitBreakerRetryTimeout     = 30 * time.Second
 )
 
 // ClientConfig holds configuration for the OneBusAway client
 type ClientConfig struct {
 	AgencyPriority  []string `json:"agency_priority"`
 	DefaultAgencies []string `json:"default_agencies"`
+}
+
+// CircuitState represents the state of a circuit breaker
+type CircuitState int
+
+const (
+	CircuitClosed CircuitState = iota
+	CircuitOpen
+	CircuitHalfOpen
+)
+
+// CircuitBreaker implements the circuit breaker pattern for external API protection
+type CircuitBreaker struct {
+	mutex           sync.RWMutex
+	failureCount    int
+	lastFailureTime time.Time
+	state           CircuitState
+}
+
+// NewCircuitBreaker creates a new circuit breaker instance
+func NewCircuitBreaker() *CircuitBreaker {
+	return &CircuitBreaker{
+		state: CircuitClosed,
+	}
+}
+
+// Call executes a function with circuit breaker protection
+func (cb *CircuitBreaker) Call(fn func() error) error {
+	if !cb.canAttempt() {
+		return fmt.Errorf("circuit breaker is open")
+	}
+
+	err := fn()
+	if err != nil {
+		cb.recordFailure()
+		return err
+	}
+
+	cb.recordSuccess()
+	return nil
+}
+
+// canAttempt determines if a call can be attempted based on circuit breaker state
+func (cb *CircuitBreaker) canAttempt() bool {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+
+	switch cb.state {
+	case CircuitClosed:
+		return true
+	case CircuitOpen:
+		return time.Since(cb.lastFailureTime) >= circuitBreakerRetryTimeout
+	case CircuitHalfOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// recordSuccess records a successful call and potentially closes the circuit
+func (cb *CircuitBreaker) recordSuccess() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount = 0
+	cb.state = CircuitClosed
+}
+
+// recordFailure records a failed call and potentially opens the circuit
+func (cb *CircuitBreaker) recordFailure() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount++
+	cb.lastFailureTime = time.Now()
+
+	if cb.failureCount >= circuitBreakerFailureThreshold {
+		cb.state = CircuitOpen
+	} else if cb.state == CircuitHalfOpen {
+		cb.state = CircuitOpen
+	}
 }
 
 // getDefaultConfig returns the default configuration with standard agency priorities
@@ -115,12 +201,13 @@ func (c *APICache) evictOldest() {
 }
 
 type OneBusAwayClient struct {
-	BaseURL      string
-	APIKey       string
-	Client       *http.Client
-	coverageArea *models.CoverageArea
-	cache        *APICache
-	config       *ClientConfig
+	BaseURL        string
+	APIKey         string
+	Client         *http.Client
+	coverageArea   *models.CoverageArea
+	cache          *APICache
+	config         *ClientConfig
+	circuitBreaker *CircuitBreaker
 }
 
 func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
@@ -130,8 +217,9 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		cache:  NewAPICache(),
-		config: getDefaultConfig(),
+		cache:          NewAPICache(),
+		config:         getDefaultConfig(),
+		circuitBreaker: NewCircuitBreaker(),
 	}
 }
 
@@ -146,8 +234,9 @@ func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig)
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		cache:  NewAPICache(),
-		config: config,
+		cache:          NewAPICache(),
+		config:         config,
+		circuitBreaker: NewCircuitBreaker(),
 	}
 }
 
@@ -179,32 +268,39 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 
 	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
 
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add cache-control headers
-	req.Header.Set("Cache-Control", "max-age=3600")
-	req.Header.Set("User-Agent", "oba-twilio/1.0")
-
-	q := req.URL.Query()
-	q.Add("key", c.APIKey)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
 	var coverageResp models.AgenciesWithCoverageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&coverageResp); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	err := c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add cache-control headers
+		req.Header.Set("Cache-Control", "max-age=3600")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&coverageResp); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	// Validate API response structure
@@ -343,34 +439,41 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 
 	endpoint := fmt.Sprintf("%s/api/where/arrivals-and-departures-for-stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add cache-control headers for arrivals (shorter cache due to time-sensitive data)
-	req.Header.Set("Cache-Control", "max-age=60")
-	req.Header.Set("User-Agent", "oba-twilio/1.0")
-
-	q := req.URL.Query()
-	q.Add("key", c.APIKey)
-	q.Add("minutesBefore", "0")
-	q.Add("minutesAfter", "30")
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
 	var obaResp models.OneBusAwayResponse
-	if err := json.NewDecoder(resp.Body).Decode(&obaResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	err = c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add cache-control headers for arrivals (shorter cache due to time-sensitive data)
+		req.Header.Set("Cache-Control", "max-age=60")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		q.Add("minutesBefore", "0")
+		q.Add("minutesAfter", "30")
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&obaResp); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate API response structure
@@ -539,35 +642,6 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
-	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
-	if err != nil {
-		return nil, models.NewInternalError("failed to create HTTP request", err)
-	}
-
-	// Add cache-control headers
-	req.Header.Set("Cache-Control", "max-age=300")
-	req.Header.Set("User-Agent", "oba-twilio/1.0")
-
-	q := req.URL.Query()
-	q.Add("key", c.APIKey)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return nil, models.NewNetworkError("failed to communicate with OneBusAway API", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, models.NewStopNotFoundError(fullStopID, nil)
-	}
-	if resp.StatusCode >= 500 {
-		return nil, models.NewServiceUnavailableError(fmt.Sprintf("API returned status %d", resp.StatusCode), nil)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, models.NewInvalidResponseError(fmt.Sprintf("unexpected status code %d", resp.StatusCode), nil)
-	}
-
 	var stopResp struct {
 		Data struct {
 			Entry struct {
@@ -585,8 +659,44 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 		Text string `json:"text"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&stopResp); err != nil {
-		return nil, models.NewInvalidResponseError("failed to decode JSON response", err)
+	err := c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		if err != nil {
+			return models.NewInternalError("failed to create HTTP request", err)
+		}
+
+		// Add cache-control headers
+		req.Header.Set("Cache-Control", "max-age=300")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return models.NewNetworkError("failed to communicate with OneBusAway API", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			return models.NewStopNotFoundError(fullStopID, nil)
+		}
+		if resp.StatusCode >= 500 {
+			return models.NewServiceUnavailableError(fmt.Sprintf("API returned status %d", resp.StatusCode), nil)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return models.NewInvalidResponseError(fmt.Sprintf("unexpected status code %d", resp.StatusCode), nil)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&stopResp); err != nil {
+			return models.NewInvalidResponseError("failed to decode JSON response", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate API response structure
@@ -668,26 +778,33 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(stopID))
 
-	req, err := http.NewRequest("GET", endpoint, nil)
+	var exists bool
+	err := c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return err
+		}
+
+		// Add cache-control headers
+		req.Header.Set("Cache-Control", "max-age=300")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		exists = resp.StatusCode == http.StatusOK
+		return nil
+	})
 	if err != nil {
 		return false
 	}
-
-	// Add cache-control headers
-	req.Header.Set("Cache-Control", "max-age=300")
-	req.Header.Set("User-Agent", "oba-twilio/1.0")
-
-	q := req.URL.Query()
-	q.Add("key", c.APIKey)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	exists := resp.StatusCode == http.StatusOK
 
 	// Cache the result
 	c.cache.Set(cacheKey, exists, cacheTTLMinutes*time.Minute)
@@ -711,36 +828,43 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 
 	endpoint := fmt.Sprintf("%s/api/where/stops-for-location.json", c.BaseURL)
 
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add cache-control headers
-	req.Header.Set("Cache-Control", "max-age=300")
-	req.Header.Set("User-Agent", "oba-twilio/1.0")
-
-	q := req.URL.Query()
-	q.Add("key", c.APIKey)
-	q.Add("lat", fmt.Sprintf("%.6f", coverage.CenterLat))
-	q.Add("lon", fmt.Sprintf("%.6f", coverage.CenterLon))
-	q.Add("radius", fmt.Sprintf("%.0f", coverage.Radius))
-	q.Add("query", query)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
 	var stopData models.StopData
-	if err := json.NewDecoder(resp.Body).Decode(&stopData); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	err := c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add cache-control headers
+		req.Header.Set("Cache-Control", "max-age=300")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		q.Add("lat", fmt.Sprintf("%.6f", coverage.CenterLat))
+		q.Add("lon", fmt.Sprintf("%.6f", coverage.CenterLon))
+		q.Add("radius", fmt.Sprintf("%.0f", coverage.Radius))
+		q.Add("query", query)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&stopData); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate API response structure
