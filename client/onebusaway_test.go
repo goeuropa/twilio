@@ -85,13 +85,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -102,13 +96,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
 				ArrivalsAndDepartures: []struct {
 					RouteShortName       string `json:"routeShortName"`
@@ -125,16 +113,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 						Status:               "default",
 					},
 				},
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					ID:   "1_75403",
-					Name: "Pine St & 3rd Ave",
-				},
+				StopId: "1_75403",
 			},
 		},
 		Code: 200,
@@ -164,7 +143,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 200, resp.Code)
-	assert.Equal(t, "Pine St & 3rd Ave", resp.Data.Entry.Stop.Name)
+	assert.Equal(t, "1_75403", resp.Data.Entry.StopId)
 	assert.Len(t, resp.Data.Entry.ArrivalsAndDepartures, 1)
 }
 
@@ -196,13 +175,7 @@ func TestProcessArrivals(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -213,13 +186,7 @@ func TestProcessArrivals(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
 				ArrivalsAndDepartures: []struct {
 					RouteShortName       string `json:"routeShortName"`
@@ -247,6 +214,7 @@ func TestProcessArrivals(t *testing.T) {
 						Status:               "default",
 					},
 				},
+				StopId: "test_stop",
 			},
 		},
 	}

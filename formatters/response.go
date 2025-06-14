@@ -60,8 +60,13 @@ func FormatVoiceResponse(arrivals []models.Arrival, stopName string) string {
 	return response.String()
 }
 
+type TwiMLSMSResponse struct {
+	XMLName string `xml:"Response"`
+	Message string `xml:"Message"`
+}
+
 func GenerateTwiMLSMS(message string) (string, error) {
-	twiml := models.TwiMLResponse{
+	twiml := TwiMLSMSResponse{
 		Message: message,
 	}
 
@@ -73,36 +78,7 @@ func GenerateTwiMLSMS(message string) (string, error) {
 	return xml.Header + string(output), nil
 }
 
-func GenerateTwiMLVoice(message string) (string, error) {
-	twiml := models.TwiMLResponse{
-		Say: message,
-	}
 
-	output, err := xml.MarshalIndent(twiml, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
-	return xml.Header + string(output), nil
-}
-
-func GenerateTwiMLGather(prompt string, action string, numDigits int) (string, error) {
-	twiml := models.TwiMLResponse{
-		Gather: &models.Gather{
-			NumDigits: numDigits,
-			Action:    action,
-			Method:    "POST",
-			Say:       prompt,
-		},
-	}
-
-	output, err := xml.MarshalIndent(twiml, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
-	return xml.Header + string(output), nil
-}
 
 func formatArrivalTime(minutes int) string {
 	if minutes <= 0 {

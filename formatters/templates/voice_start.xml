@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Gather numDigits="6" action="/voice/find_stop" method="POST">
+        <Say>{{.WelcomePrompt}}</Say>
+    </Gather>
+</Response>

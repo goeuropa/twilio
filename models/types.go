@@ -95,16 +95,4 @@ type CoverageArea struct {
 	Radius    float64
 }
 
-type TwiMLResponse struct {
-	XMLName string  `xml:"Response"`
-	Say     string  `xml:"Say,omitempty"`
-	Message string  `xml:"Message,omitempty"`
-	Gather  *Gather `xml:"Gather,omitempty"`
-}
 
-type Gather struct {
-	NumDigits int    `xml:"numDigits,attr,omitempty,omitzero"`
-	Action    string `xml:"action,attr,omitempty"`
-	Method    string `xml:"method,attr,omitempty"`
-	Say       string `xml:"Say,omitempty"`
-}

@@ -616,8 +616,8 @@ func TestGetAgencyNameFromID(t *testing.T) {
 func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	// Create a server that delays responses beyond the timeout
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Sleep longer than the API timeout to trigger timeout mechanism
-		time.Sleep(35 * time.Second) // apiTimeoutSeconds = 30
+		// Sleep longer than the HTTP client timeout to trigger timeout mechanism
+		time.Sleep(15 * time.Second) // HTTP client timeout is 10s, context timeout is 1s
 
 		mockStopResp := struct {
 			Data struct {
@@ -677,16 +677,26 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOneBusAwayClient(server.URL, "test-key")
+	// Create client with short timeout for testing
+	config := &ClientConfig{
+		AgencyPriority:  []string{"1", "40"},
+		DefaultAgencies: []string{"1", "40"},
+		APITimeout:      1 * time.Second, // Short timeout for fast test
+	}
+	client, err := NewOneBusAwayClientWithConfig(server.URL, "test-key", config)
+	assert.NoError(t, err)
+	
+	// Override HTTP client timeout to be shorter for testing
+	client.Client.Timeout = 500 * time.Millisecond
 
 	// This test should complete quickly due to timeout mechanism
-	// even though the server would take 35 seconds to respond
+	// even though the server would take 15s to respond
 	start := time.Now()
 	stops, err := client.FindAllMatchingStops("12345")
 	duration := time.Since(start)
 
-	// Should complete within reasonable time due to timeout
-	assert.Less(t, duration, 32*time.Second, "FindAllMatchingStops should timeout after ~30 seconds")
+	// Should complete within reasonable time due to timeout (500ms HTTP timeout + some buffer)
+	assert.Less(t, duration, 1*time.Second, "FindAllMatchingStops should timeout after ~500ms")
 
 	// Should return empty results due to timeout
 	assert.NoError(t, err)

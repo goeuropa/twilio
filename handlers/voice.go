@@ -15,14 +15,21 @@ import (
 )
 
 type VoiceHandler struct {
-	OBAClient    client.OneBusAwayClientInterface
-	SessionStore *SessionStore
+	OBAClient       client.OneBusAwayClientInterface
+	SessionStore    *SessionStore
+	TemplateManager *formatters.VoiceTemplateManager
 }
 
 func NewVoiceHandler(obaClient client.OneBusAwayClientInterface) *VoiceHandler {
+	templateManager, err := formatters.NewVoiceTemplateManager()
+	if err != nil {
+		log.Fatalf("Failed to initialize voice template manager: %v", err)
+	}
+
 	return &VoiceHandler{
-		OBAClient:    obaClient,
-		SessionStore: NewSessionStore(),
+		OBAClient:       obaClient,
+		SessionStore:    NewSessionStore(),
+		TemplateManager: templateManager,
 	}
 }
 
@@ -37,7 +44,9 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("Failed to bind voice request: %v", err)
 		c.Header("Content-Type", "text/xml")
-		twiml, _ := formatters.GenerateTwiMLVoice("Invalid request format.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid request format.",
+		})
 		c.String(http.StatusBadRequest, twiml)
 		return
 	}
@@ -47,21 +56,27 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	prompt := "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key."
 
 	c.Header("Content-Type", "text/xml")
-	twiml, err := formatters.GenerateTwiMLGather(prompt, "/voice/input", 6)
+	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
+		WelcomePrompt: prompt,
+	})
 	if err != nil {
 		log.Printf("Failed to generate TwiML: %v", err)
-		twiml, _ = formatters.GenerateTwiMLVoice("Error generating response.")
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Error generating response.",
+		})
 	}
 
 	c.String(http.StatusOK, twiml)
 }
 
-func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
+func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 	var req models.TwilioVoiceRequest
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("Failed to bind voice input request: %v", err)
 		c.Header("Content-Type", "text/xml")
-		twiml, _ := formatters.GenerateTwiMLVoice("Invalid request format.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid request format.",
+		})
 		c.String(http.StatusBadRequest, twiml)
 		return
 	}
@@ -81,13 +96,17 @@ func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
 
 	stopID := req.Digits
 	if stopID == "" {
-		twiml, _ := formatters.GenerateTwiMLVoice("I didn't receive any digits. Please try calling again.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "I didn't receive any digits. Please try calling again.",
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
 
 	if len(stopID) < 3 || len(stopID) > 10 {
-		twiml, _ := formatters.GenerateTwiMLVoice("Invalid stop ID. Please try calling again with a valid stop ID.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid stop ID. Please try calling again with a valid stop ID.",
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -104,13 +123,17 @@ func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
 		} else {
 			message = fmt.Sprintf("Sorry, I couldn't search for stop %s. Please check the stop ID and try again.", stopID)
 		}
-		twiml, _ := formatters.GenerateTwiMLVoice(message)
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: message,
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
 
 	if len(matchingStops) == 0 {
-		twiml, _ := formatters.GenerateTwiMLVoice("Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -125,16 +148,22 @@ func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
 		}
 		if err := h.SessionStore.SetDisambiguationSession(req.From, session); err != nil {
 			log.Printf("Failed to store disambiguation session for %s: %v", req.From, err)
-			twiml, _ := formatters.GenerateTwiMLVoice("Sorry, there was an error processing your request. Please try again.")
+			twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+				ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
+			})
 			c.String(http.StatusOK, twiml)
 			return
 		}
 
 		// Use TwiML Gather to collect the user's choice
-		twiml, err := formatters.GenerateTwiMLGather(disambiguationMsg, "/voice/input", 1)
+		twiml, err := h.TemplateManager.RenderVoiceDisambiguation(formatters.VoiceDisambiguationContext{
+			DisambiguationPrompt: disambiguationMsg,
+		})
 		if err != nil {
 			log.Printf("Failed to generate TwiML gather: %v", err)
-			twiml, _ = formatters.GenerateTwiMLVoice("Error generating response.")
+			twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+				ErrorMessage: "Error generating response.",
+			})
 		}
 		c.String(http.StatusOK, twiml)
 		return
@@ -162,7 +191,9 @@ func (h *VoiceHandler) parseDisambiguationChoice(digits string) int {
 func (h *VoiceHandler) handleVoiceDisambiguationChoice(c *gin.Context, req models.TwilioVoiceRequest, choice int) {
 	session := h.SessionStore.GetDisambiguationSession(req.From)
 	if session == nil {
-		twiml, _ := formatters.GenerateTwiMLVoice("No active selection. Please call again and enter a stop ID to get started.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "No active selection. Please call again and enter a stop ID to get started.",
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -172,7 +203,9 @@ func (h *VoiceHandler) handleVoiceDisambiguationChoice(c *gin.Context, req model
 		if maxChoice > 9 {
 			maxChoice = 9 // Limit voice choices to single digits
 		}
-		twiml, _ := formatters.GenerateTwiMLVoice(fmt.Sprintf("Please press a number between 1 and %d.", maxChoice))
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: fmt.Sprintf("Please press a number between 1 and %d.", maxChoice),
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -213,7 +246,9 @@ func (h *VoiceHandler) getAndFormatVoiceArrivals(c *gin.Context, fullStopID stri
 	obaResp, err := h.OBAClient.GetArrivalsAndDepartures(fullStopID)
 	if err != nil {
 		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
-		twiml, _ := formatters.GenerateTwiMLVoice("Sorry, I couldn't get arrival information for that stop. Please try again.")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Sorry, I couldn't get arrival information for that stop. Please try again.",
+		})
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -223,10 +258,14 @@ func (h *VoiceHandler) getAndFormatVoiceArrivals(c *gin.Context, fullStopID stri
 
 	message := formatters.FormatVoiceResponse(arrivals, stopName)
 
-	twiml, err := formatters.GenerateTwiMLVoice(message)
+	twiml, err := h.TemplateManager.RenderVoiceFindStop(formatters.VoiceFindStopContext{
+		ArrivalsMessage: message,
+	})
 	if err != nil {
 		log.Printf("Failed to generate TwiML: %v", err)
-		twiml, _ = formatters.GenerateTwiMLVoice("Error generating response.")
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Error generating response.",
+		})
 	}
 
 	c.String(http.StatusOK, twiml)

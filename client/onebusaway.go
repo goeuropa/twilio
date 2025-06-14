@@ -43,8 +43,9 @@ const (
 
 // ClientConfig holds configuration for the OneBusAway client
 type ClientConfig struct {
-	AgencyPriority  []string `json:"agency_priority"`
-	DefaultAgencies []string `json:"default_agencies"`
+	AgencyPriority  []string      `json:"agency_priority"`
+	DefaultAgencies []string      `json:"default_agencies"`
+	APITimeout      time.Duration `json:"api_timeout,omitempty"` // Override default API timeout for testing
 }
 
 // CircuitState represents the state of a circuit breaker
@@ -134,6 +135,14 @@ func getDefaultConfig() *ClientConfig {
 		AgencyPriority:  []string{"1", "40", "29", "95", "97", "98", "3", "23"},
 		DefaultAgencies: []string{"1", "40", "29", "95", "97", "98", "3", "23"},
 	}
+}
+
+// getEffectiveTimeout returns the configured timeout or the default if not set
+func (c *OneBusAwayClient) getEffectiveTimeout() time.Duration {
+	if c.config != nil && c.config.APITimeout > 0 {
+		return c.config.APITimeout
+	}
+	return time.Duration(apiTimeoutSeconds) * time.Second
 }
 
 // validateConfig validates the client configuration for required fields and data integrity
@@ -765,12 +774,13 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 	agencies := c.getAgencyList()
 
 	// Use context for proper timeout and cancellation
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(apiTimeoutSeconds)*time.Second)
+	timeout := c.getEffectiveTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Use a channel to collect results and limit concurrency
 	semaphore := make(chan struct{}, maxConcurrentRequests)
-	resultChan := make(chan *models.StopOption, len(agencies))
+	resultChan := make(chan *models.StopOption, len(agencies)*2) // Buffer for all potential results
 	var wg sync.WaitGroup
 
 	for _, agency := range agencies {
@@ -802,6 +812,14 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 
 			fullStopID := fmt.Sprintf("%s_%s", agencyID, stopID)
 			stopOption, err := c.GetStopInfoWithContext(ctx, fullStopID)
+			
+			// Always check if context is done before sending
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			
 			if err == nil && stopOption != nil {
 				select {
 				case resultChan <- stopOption:
@@ -818,26 +836,29 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 		}(agency)
 	}
 
-	// Close result channel when all goroutines complete or timeout
+	// Close result channel when all goroutines complete
 	go func() {
-		defer close(resultChan)
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			wg.Wait()
-		}()
-
-		select {
-		case <-done:
-		case <-ctx.Done():
-		}
+		wg.Wait()
+		close(resultChan)
 	}()
 
-	// Collect results
+	// Collect results with timeout
 	var matchingStops []models.StopOption
-	for stopOption := range resultChan {
-		if stopOption != nil {
-			matchingStops = append(matchingStops, *stopOption)
+	
+CollectLoop:
+	for {
+		select {
+		case stopOption, ok := <-resultChan:
+			if !ok {
+				// Channel closed, all goroutines finished
+				break CollectLoop
+			}
+			if stopOption != nil {
+				matchingStops = append(matchingStops, *stopOption)
+			}
+		case <-ctx.Done():
+			// Timeout occurred, stop collecting but let goroutines finish
+			break CollectLoop
 		}
 	}
 

@@ -131,13 +131,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -148,23 +142,9 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					Name: "Test Stop",
-				},
+				StopId: "1_12345",
 			},
 		},
 		Code: 200,
@@ -192,7 +172,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Test Stop")
+	assert.Contains(t, w.Body.String(), "King County Metro: Test Stop")
 	assert.Contains(t, w.Body.String(), "Route 8")
 	mockClient.AssertExpectations(t)
 }
@@ -270,13 +250,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -287,23 +261,9 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					Name: "University Street Station",
-				},
+				StopId: "40_12345",
 			},
 		},
 		Code: 200,
@@ -330,7 +290,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "University Street Station")
+	assert.Contains(t, w.Body.String(), "Sound Transit: University Street Station")
 	assert.Contains(t, w.Body.String(), "Route Link")
 	mockClient.AssertExpectations(t)
 }

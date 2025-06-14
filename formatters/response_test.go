@@ -81,29 +81,7 @@ func TestGenerateTwiMLSMS(t *testing.T) {
 	assert.Contains(t, result, "</Response>")
 }
 
-func TestGenerateTwiMLVoice(t *testing.T) {
-	result, err := GenerateTwiMLVoice("Test voice message")
 
-	assert.NoError(t, err)
-	assert.Contains(t, result, "<?xml version=\"1.0\"")
-	assert.Contains(t, result, "<Response>")
-	assert.Contains(t, result, "<Say>Test voice message</Say>")
-	assert.Contains(t, result, "</Response>")
-}
-
-func TestGenerateTwiMLGather(t *testing.T) {
-	result, err := GenerateTwiMLGather("Enter digits", "/input", 5)
-
-	assert.NoError(t, err)
-	assert.Contains(t, result, "<?xml version=\"1.0\"")
-	assert.Contains(t, result, "<Response>")
-	assert.Contains(t, result, "<Gather")
-	assert.Contains(t, result, "numDigits=\"5\"")
-	assert.Contains(t, result, "action=\"/input\"")
-	assert.Contains(t, result, "method=\"POST\"")
-	assert.Contains(t, result, "<Say>Enter digits</Say>")
-	assert.Contains(t, result, "</Response>")
-}
 
 func TestExtractStopID(t *testing.T) {
 	tests := []struct {

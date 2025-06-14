@@ -109,7 +109,7 @@ func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
 	r := gin.New()
 	r.POST("/sms", smsHandler.HandleSMS)
 	r.POST("/voice", voiceHandler.HandleVoiceStart)
-	r.POST("/voice/input", voiceHandler.HandleVoiceInput)
+	r.POST("/voice/find_stop", voiceHandler.HandleFindStop)
 
 	return r, mockClient
 }
@@ -141,13 +141,7 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -158,23 +152,9 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					Name: "Test Stop",
-				},
+				StopId: "1_75403",
 			},
 		},
 		Code: 200,
@@ -212,10 +192,11 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(w, req)
 
+	bodyText := w.Body.String()
+
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Test Stop")
-	assert.Contains(t, w.Body.String(), "Route 8")
-	assert.Contains(t, w.Body.String(), "Seattle Center")
+	assert.Contains(t, bodyText, "Route 8")
+	assert.Contains(t, bodyText, "Seattle Center")
 	mockClient.AssertExpectations(t)
 }
 
@@ -268,13 +249,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -285,23 +260,9 @@ func TestVoiceHandler_Input(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					Name: "Voice Test Stop",
-				},
+				StopId: "1_12345",
 			},
 		},
 		Code: 200,
@@ -315,7 +276,17 @@ func TestVoiceHandler_Input(t *testing.T) {
 		},
 	}
 
-	mockClient.On("GetArrivalsAndDepartures", "12345").Return(mockResponse, nil)
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_12345",
+			AgencyName:  "King County Metro",
+			StopName:    "Voice Test Stop",
+			DisplayText: "King County Metro: Voice Test Stop",
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
+	mockClient.On("GetArrivalsAndDepartures", "1_12345").Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
 
 	form := url.Values{}
@@ -325,12 +296,11 @@ func TestVoiceHandler_Input(t *testing.T) {
 	form.Set("Digits", "12345")
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/voice/input", strings.NewReader(form.Encode()))
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Voice Test Stop")
 	assert.Contains(t, w.Body.String(), "Route 43")
 	assert.Contains(t, w.Body.String(), "Capitol Hill")
 	mockClient.AssertExpectations(t)

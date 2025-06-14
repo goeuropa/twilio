@@ -105,7 +105,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	}
 
 	// Single stop found, get arrivals directly
-	h.getAndFormatArrivals(c, matchingStops[0].FullStopID)
+	h.getAndFormatArrivalsWithStopName(c, matchingStops[0].FullStopID, matchingStops[0].DisplayText)
 }
 
 func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.TwilioSMSRequest, choice int) {
@@ -127,10 +127,10 @@ func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.Twili
 
 	log.Printf("User %s selected stop %s: %s", req.From, selectedStop.FullStopID, selectedStop.DisplayText)
 
-	h.getAndFormatArrivals(c, selectedStop.FullStopID)
+	h.getAndFormatArrivalsWithStopName(c, selectedStop.FullStopID, selectedStop.DisplayText)
 }
 
-func (h *SMSHandler) getAndFormatArrivals(c *gin.Context, fullStopID string) {
+func (h *SMSHandler) getAndFormatArrivalsWithStopName(c *gin.Context, fullStopID string, stopDisplayName string) {
 	obaResp, err := h.OBAClient.GetArrivalsAndDepartures(fullStopID)
 	if err != nil {
 		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
@@ -140,9 +140,8 @@ func (h *SMSHandler) getAndFormatArrivals(c *gin.Context, fullStopID string) {
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
-	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME //obaResp.Data.Entry.Stop.Name
-
-	message := formatters.FormatSMSResponse(arrivals, stopName)
+	
+	message := formatters.FormatSMSResponse(arrivals, stopDisplayName)
 
 	twiml, err := formatters.GenerateTwiMLSMS(message)
 	if err != nil {

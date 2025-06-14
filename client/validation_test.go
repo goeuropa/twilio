@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,7 +59,7 @@ func TestGetStopInfo_InvalidResponse(t *testing.T) {
 				Code: 200,
 				Text: "OK",
 			},
-			wantErr: "invalid response: missing stop ID",
+			wantErr: "missing stop ID",
 		},
 		{
 			name: "Missing stop name",
@@ -101,7 +102,7 @@ func TestGetStopInfo_InvalidResponse(t *testing.T) {
 				Code: 200,
 				Text: "OK",
 			},
-			wantErr: "invalid response: missing stop name",
+			wantErr: "missing stop name",
 		},
 	}
 
@@ -109,7 +110,8 @@ func TestGetStopInfo_InvalidResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(tt.response)
+				err := json.NewEncoder(w).Encode(tt.response)
+				require.NoError(t, err)
 			}))
 			defer server.Close()
 
@@ -262,13 +264,7 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			} `json:"entry"`
 		}{
 			Entry: struct {
@@ -279,24 +275,9 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				} `json:"arrivalsAndDepartures"`
-				Stop struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				} `json:"stop"`
+				StopId string `json:"stopId"`
 			}{
-				Stop: struct {
-					ID        string  `json:"id"`
-					Name      string  `json:"name"`
-					Direction string  `json:"direction"`
-					Lat       float64 `json:"lat"`
-					Lon       float64 `json:"lon"`
-				}{
-					ID:   "", // Missing stop ID
-					Name: "Test Stop",
-				},
+				StopId: "", // Missing stop ID
 			},
 		},
 		Code: 200,
