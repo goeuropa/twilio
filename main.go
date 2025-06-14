@@ -35,14 +35,14 @@ func main() {
 	}
 
 	obaClient := client.NewOneBusAwayClient(obaBaseURL, obaAPIKey)
-	
+
 	log.Printf("Initializing coverage area for OneBusAway server...")
 	if err := obaClient.InitializeCoverage(); err != nil {
 		log.Printf("Warning: Failed to initialize coverage area: %v", err)
 		log.Printf("SearchStops functionality may not work properly")
 	} else {
 		coverage := obaClient.GetCoverageArea()
-		log.Printf("Coverage area initialized: center=(%.4f,%.4f), radius=%.0fm", 
+		log.Printf("Coverage area initialized: center=(%.4f,%.4f), radius=%.0fm",
 			coverage.CenterLat, coverage.CenterLon, coverage.Radius)
 	}
 

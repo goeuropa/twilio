@@ -14,7 +14,7 @@ func FormatSMSResponse(arrivals []models.Arrival, stopName string) string {
 	}
 
 	var response strings.Builder
-	
+
 	if stopName != "" {
 		response.WriteString(fmt.Sprintf("Stop: %s\n", stopName))
 	}
@@ -23,11 +23,11 @@ func FormatSMSResponse(arrivals []models.Arrival, stopName string) string {
 		if i >= 3 {
 			break
 		}
-		
+
 		timeText := formatArrivalTime(arrival.MinutesUntilArrival)
-		response.WriteString(fmt.Sprintf("Route %s to %s: %s\n", 
-			arrival.RouteShortName, 
-			arrival.TripHeadsign, 
+		response.WriteString(fmt.Sprintf("Route %s to %s: %s\n",
+			arrival.RouteShortName,
+			arrival.TripHeadsign,
 			timeText))
 	}
 
@@ -40,7 +40,7 @@ func FormatVoiceResponse(arrivals []models.Arrival, stopName string) string {
 	}
 
 	var response strings.Builder
-	
+
 	if stopName != "" {
 		response.WriteString(fmt.Sprintf("Arrivals for %s. ", stopName))
 	}
@@ -49,11 +49,11 @@ func FormatVoiceResponse(arrivals []models.Arrival, stopName string) string {
 		if i >= 3 {
 			break
 		}
-		
+
 		timeText := formatArrivalTimeVoice(arrival.MinutesUntilArrival)
-		response.WriteString(fmt.Sprintf("Route %s to %s %s. ", 
-			arrival.RouteShortName, 
-			arrival.TripHeadsign, 
+		response.WriteString(fmt.Sprintf("Route %s to %s %s. ",
+			arrival.RouteShortName,
+			arrival.TripHeadsign,
 			timeText))
 	}
 
@@ -126,18 +126,18 @@ func formatArrivalTimeVoice(minutes int) string {
 
 func ExtractStopID(message string) string {
 	message = strings.TrimSpace(message)
-	
+
 	if message == "" {
 		return ""
 	}
-	
+
 	fields := strings.Fields(message)
 	if len(fields) == 0 {
 		return ""
 	}
-	
+
 	stopID := fields[0]
-	
+
 	if len(stopID) >= 3 && len(stopID) <= 10 {
 		for _, char := range stopID {
 			if char < '0' || char > '9' {
@@ -146,13 +146,13 @@ func ExtractStopID(message string) string {
 		}
 		return stopID
 	}
-	
+
 	return ""
 }
 
 func IsDisambiguationChoice(message string) int {
 	message = strings.TrimSpace(message)
-	
+
 	// Support 1-99 for better scalability
 	if len(message) >= 1 && len(message) <= 2 {
 		// Check if all characters are digits
@@ -161,13 +161,13 @@ func IsDisambiguationChoice(message string) int {
 				return 0
 			}
 		}
-		
+
 		// Parse the number
 		if num := parseInteger(message); num >= 1 && num <= 99 {
 			return num
 		}
 	}
-	
+
 	return 0
 }
 
@@ -187,19 +187,19 @@ func FormatDisambiguationMessage(stopOptions []models.StopOption, originalStopID
 	if len(stopOptions) == 0 {
 		return fmt.Sprintf("No stops found for ID %s.", originalStopID)
 	}
-	
+
 	if len(stopOptions) == 1 {
 		return ""
 	}
-	
+
 	var response strings.Builder
 	response.WriteString(fmt.Sprintf("Multiple stops found for %s:\n", originalStopID))
-	
+
 	for i, option := range stopOptions {
 		response.WriteString(fmt.Sprintf("%d) %s\n", i+1, option.DisplayText))
 	}
-	
+
 	response.WriteString("Reply with the number to choose.")
-	
+
 	return response.String()
 }

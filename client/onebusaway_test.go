@@ -15,7 +15,7 @@ import (
 
 func TestNewOneBusAwayClient(t *testing.T) {
 	client := NewOneBusAwayClient("https://api.example.com", "test-key")
-	
+
 	assert.Equal(t, "https://api.example.com", client.BaseURL)
 	assert.Equal(t, "test-key", client.APIKey)
 	assert.NotNil(t, client.Client)
@@ -24,7 +24,7 @@ func TestNewOneBusAwayClient(t *testing.T) {
 
 func TestResolveStopID(t *testing.T) {
 	client := NewOneBusAwayClient("https://api.example.com", "test-key")
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -53,7 +53,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 	mockCoverage := models.AgenciesWithCoverageResponse{
 		Data: struct {
 			LimitExceeded bool `json:"limitExceeded"`
-			List []struct {
+			List          []struct {
 				AgencyID string  `json:"agencyId"`
 				Lat      float64 `json:"lat"`
 				LatSpan  float64 `json:"latSpan"`
@@ -79,7 +79,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -96,7 +96,7 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -111,14 +111,14 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 				} `json:"stop"`
 			}{
 				ArrivalsAndDepartures: []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				}{
 					{
-						RouteShortName:        "8",
+						RouteShortName:       "8",
 						TripHeadsign:         "Seattle Center",
 						PredictedArrivalTime: time.Now().Unix()*1000 + 300000,
 						ScheduledArrivalTime: time.Now().Unix()*1000 + 240000,
@@ -158,9 +158,9 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	resp, err := client.GetArrivalsAndDepartures("75403")
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 200, resp.Code)
@@ -175,9 +175,9 @@ func TestGetArrivalsAndDepartures_APIError(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	_, err := client.GetArrivalsAndDepartures("invalid")
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
 }
@@ -190,7 +190,7 @@ func TestProcessArrivals(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -207,7 +207,7 @@ func TestProcessArrivals(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -222,26 +222,26 @@ func TestProcessArrivals(t *testing.T) {
 				} `json:"stop"`
 			}{
 				ArrivalsAndDepartures: []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
 					Status               string `json:"status"`
 				}{
 					{
-						RouteShortName:        "8",
+						RouteShortName:       "8",
 						TripHeadsign:         "Seattle Center",
 						PredictedArrivalTime: now + 300000,
 						Status:               "default",
 					},
 					{
-						RouteShortName:        "43",
+						RouteShortName:       "43",
 						TripHeadsign:         "Capitol Hill",
 						PredictedArrivalTime: now - 60000,
 						Status:               "default",
 					},
 					{
-						RouteShortName:        "49",
+						RouteShortName:       "49",
 						TripHeadsign:         "U District",
 						PredictedArrivalTime: now + 4000000,
 						Status:               "default",
@@ -252,7 +252,7 @@ func TestProcessArrivals(t *testing.T) {
 	}
 
 	arrivals := client.ProcessArrivals(mockResponse)
-	
+
 	assert.Len(t, arrivals, 1)
 	assert.Equal(t, "8", arrivals[0].RouteShortName)
 	assert.Equal(t, "Seattle Center", arrivals[0].TripHeadsign)
@@ -270,7 +270,7 @@ func TestStopExists(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	assert.True(t, client.stopExists("1_75403"))
 	assert.False(t, client.stopExists("1_invalid"))
 }

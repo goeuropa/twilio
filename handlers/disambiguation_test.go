@@ -62,13 +62,13 @@ func (m *MockOneBusAwayClientDisambiguation) GetStopInfo(fullStopID string) (*mo
 
 func setupDisambiguationTestRouter() (*gin.Engine, *MockOneBusAwayClientDisambiguation, *SMSHandler) {
 	gin.SetMode(gin.TestMode)
-	
+
 	mockClient := &MockOneBusAwayClientDisambiguation{}
 	smsHandler := NewSMSHandler(mockClient)
-	
+
 	r := gin.New()
 	r.POST("/sms", smsHandler.HandleSMS)
-	
+
 	return r, mockClient, smsHandler
 }
 
@@ -88,7 +88,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -105,7 +105,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -136,7 +136,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 	mockArrivals := []models.Arrival{
 		{
 			RouteShortName:      "8",
-			TripHeadsign:       "Downtown",
+			TripHeadsign:        "Downtown",
 			MinutesUntilArrival: 5,
 		},
 	}
@@ -227,7 +227,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -244,7 +244,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -275,7 +275,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 	mockArrivals := []models.Arrival{
 		{
 			RouteShortName:      "Link",
-			TripHeadsign:       "SeaTac Airport",
+			TripHeadsign:        "SeaTac Airport",
 			MinutesUntilArrival: 3,
 		},
 	}
@@ -345,16 +345,16 @@ func TestSMSHandler_DisambiguationChoice_NoSession(t *testing.T) {
 func TestSessionStore_SetAndGet(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Close()
-	
+
 	session := &models.DisambiguationSession{
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_12345", DisplayText: "Test Stop"},
 		},
 	}
-	
+
 	err := store.SetDisambiguationSession("+14444444444", session)
 	assert.NoError(t, err)
-	
+
 	retrieved := store.GetDisambiguationSession("+14444444444")
 	assert.NotNil(t, retrieved)
 	assert.Len(t, retrieved.StopOptions, 1)
@@ -364,17 +364,17 @@ func TestSessionStore_SetAndGet(t *testing.T) {
 func TestSessionStore_Clear(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Close()
-	
+
 	session := &models.DisambiguationSession{
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_12345", DisplayText: "Test Stop"},
 		},
 	}
-	
+
 	err := store.SetDisambiguationSession("+14444444444", session)
 	assert.NoError(t, err)
 	store.ClearDisambiguationSession("+14444444444")
-	
+
 	retrieved := store.GetDisambiguationSession("+14444444444")
 	assert.Nil(t, retrieved)
 }
@@ -382,19 +382,19 @@ func TestSessionStore_Clear(t *testing.T) {
 func TestSessionStore_ConcurrentAccess(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Close()
-	
+
 	session := &models.DisambiguationSession{
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_12345", DisplayText: "Test Stop"},
 		},
 	}
-	
+
 	const numGoroutines = 100
 	const phoneNumber = "+14444444444"
-	
+
 	// Test concurrent reads and writes
 	done := make(chan bool, numGoroutines*2)
-	
+
 	// Writers
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -402,7 +402,7 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 			done <- true
 		}()
 	}
-	
+
 	// Readers
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -410,12 +410,12 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 			done <- true
 		}()
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < numGoroutines*2; i++ {
 		<-done
 	}
-	
+
 	// Should still be able to get the session
 	retrieved := store.GetDisambiguationSession(phoneNumber)
 	assert.NotNil(t, retrieved)
@@ -423,41 +423,41 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 
 func TestSessionStore_ProperCleanup(t *testing.T) {
 	store := NewSessionStore()
-	
+
 	// Add a session that should be cleaned up - we'll manipulate it after setting
 	session := &models.DisambiguationSession{
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_12345", DisplayText: "Test Stop"},
 		},
 	}
-	
+
 	err := store.SetDisambiguationSession("+14444444444", session)
 	assert.NoError(t, err)
-	
+
 	// Manually expire the session by manipulating the internal state
 	store.mutex.Lock()
 	if storedSession, exists := store.sessions["+14444444444"]; exists {
 		storedSession.CreatedAt = time.Now().Unix() - (sessionTimeoutMinutes+1)*60
 	}
 	store.mutex.Unlock()
-	
+
 	// Getting expired session should return nil and clean it up
 	retrieved := store.GetDisambiguationSession("+14444444444")
 	assert.Nil(t, retrieved)
-	
+
 	store.Close()
 }
 
 func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Close()
-	
+
 	session := &models.DisambiguationSession{
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_12345", DisplayText: "Test Stop"},
 		},
 	}
-	
+
 	tests := []struct {
 		name        string
 		phoneNumber string
@@ -472,7 +472,7 @@ func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 		{"Invalid format - empty", "", true},
 		{"Invalid format - letters", "+1abcdefghij", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := store.SetDisambiguationSession(tt.phoneNumber, session)
@@ -491,7 +491,7 @@ func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 func TestSessionStore_GetWithInvalidPhoneNumber(t *testing.T) {
 	store := NewSessionStore()
 	defer store.Close()
-	
+
 	tests := []struct {
 		name        string
 		phoneNumber string
@@ -501,7 +501,7 @@ func TestSessionStore_GetWithInvalidPhoneNumber(t *testing.T) {
 		{"Invalid format - empty", ""},
 		{"Invalid format - letters", "+1abcdefghij"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			session := store.GetDisambiguationSession(tt.phoneNumber)

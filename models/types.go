@@ -27,28 +27,28 @@ type TwilioVoiceRequest struct {
 }
 
 type Stop struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Direction   string  `json:"direction"`
-	Latitude    float64 `json:"lat"`
-	Longitude   float64 `json:"lon"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Direction       string   `json:"direction"`
+	Latitude        float64  `json:"lat"`
+	Longitude       float64  `json:"lon"`
 	RouteShortNames []string `json:"routeShortNames"`
 }
 
 type Arrival struct {
-	RouteShortName        string    `json:"routeShortName"`
-	TripHeadsign         string    `json:"tripHeadsign"`
-	PredictedArrivalTime int64     `json:"predictedArrivalTime"`
-	ScheduledArrivalTime int64     `json:"scheduledArrivalTime"`
-	MinutesUntilArrival  int       `json:"minutesUntilArrival"`
-	Status               string    `json:"status"`
+	RouteShortName       string `json:"routeShortName"`
+	TripHeadsign         string `json:"tripHeadsign"`
+	PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+	ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+	MinutesUntilArrival  int    `json:"minutesUntilArrival"`
+	Status               string `json:"status"`
 }
 
 type OneBusAwayResponse struct {
 	Data struct {
 		Entry struct {
 			ArrivalsAndDepartures []struct {
-				RouteShortName        string `json:"routeShortName"`
+				RouteShortName       string `json:"routeShortName"`
 				TripHeadsign         string `json:"tripHeadsign"`
 				PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 				ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -64,8 +64,8 @@ type OneBusAwayResponse struct {
 type StopData struct {
 	Data struct {
 		List []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID   string  `json:"id"`
+			Name string  `json:"name"`
 			Lat  float64 `json:"lat"`
 			Lon  float64 `json:"lon"`
 		} `json:"list"`
@@ -77,7 +77,7 @@ type StopData struct {
 type AgenciesWithCoverageResponse struct {
 	Data struct {
 		LimitExceeded bool `json:"limitExceeded"`
-		List []struct {
+		List          []struct {
 			AgencyID string  `json:"agencyId"`
 			Lat      float64 `json:"lat"`
 			LatSpan  float64 `json:"latSpan"`
@@ -96,14 +96,14 @@ type CoverageArea struct {
 }
 
 type TwiMLResponse struct {
-	XMLName string `xml:"Response"`
-	Say     string `xml:"Say,omitempty"`
-	Message string `xml:"Message,omitempty"`
+	XMLName string  `xml:"Response"`
+	Say     string  `xml:"Say,omitempty"`
+	Message string  `xml:"Message,omitempty"`
 	Gather  *Gather `xml:"Gather,omitempty"`
 }
 
 type Gather struct {
-	NumDigits int    `xml:"numDigits,attr,omitempty"`
+	NumDigits int    `xml:"numDigits,attr,omitempty,omitzero"`
 	Action    string `xml:"action,attr,omitempty"`
 	Method    string `xml:"method,attr,omitempty"`
 	Say       string `xml:"Say,omitempty"`

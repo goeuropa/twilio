@@ -17,7 +17,7 @@ const (
 	// apiTimeoutSeconds defines the maximum time to wait for API operations
 	// Set to 30 seconds to balance responsiveness with reliability for mobile users
 	apiTimeoutSeconds = 30
-	
+
 	// maxConcurrentRequests limits parallel API calls to prevent overwhelming the server
 	// Set to 10 to balance performance with server resource conservation
 	maxConcurrentRequests = 10
@@ -42,7 +42,7 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 
 func (c *OneBusAwayClient) InitializeCoverage() error {
 	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
-	
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -189,7 +189,7 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 	}
 
 	endpoint := fmt.Sprintf("%s/api/where/arrivals-and-departures-for-stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
-	
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -239,7 +239,7 @@ func (c *OneBusAwayClient) resolveStopID(stopID string) (string, error) {
 	}
 
 	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
-	
+
 	for _, agency := range agencies {
 		fullStopID := fmt.Sprintf("%s_%s", agency, stopID)
 		if c.stopExists(fullStopID) {
@@ -268,7 +268,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 	}
 
 	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
-	
+
 	// Use a channel to collect results and limit concurrency
 	semaphore := make(chan struct{}, maxConcurrentRequests)
 	resultChan := make(chan *models.StopOption, len(agencies))
@@ -278,7 +278,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 		wg.Add(1)
 		go func(agencyID string) {
 			defer wg.Done()
-			
+
 			// Acquire semaphore with panic recovery
 			semaphore <- struct{}{}
 			defer func() {
@@ -288,7 +288,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 				}
 				<-semaphore
 			}()
-			
+
 			fullStopID := fmt.Sprintf("%s_%s", agencyID, stopID)
 			stopOption, err := c.GetStopInfo(fullStopID)
 			if err == nil && stopOption != nil {
@@ -306,7 +306,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 			wg.Wait()
 			close(done)
 		}()
-		
+
 		select {
 		case <-done:
 			close(resultChan)
@@ -328,7 +328,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 
 func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, error) {
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
-	
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -381,7 +381,7 @@ func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, e
 	}
 
 	agencyName := c.getAgencyNameFromID(fullStopID, stopResp.Data.References.Agencies)
-	
+
 	return &models.StopOption{
 		FullStopID:  fullStopID,
 		AgencyName:  agencyName,
@@ -398,9 +398,9 @@ func (c *OneBusAwayClient) getAgencyNameFromID(stopID string, agencies []struct 
 	if len(parts) < 2 {
 		return "Unknown"
 	}
-	
+
 	agencyID := parts[0]
-	
+
 	for _, agency := range agencies {
 		if agency.ID == agencyID {
 			return agency.Name
@@ -431,7 +431,7 @@ func (c *OneBusAwayClient) getAgencyNameFromID(stopID string, agencies []struct 
 
 func (c *OneBusAwayClient) stopExists(stopID string) bool {
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(stopID))
-	
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return false
@@ -457,7 +457,7 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 	}
 
 	endpoint := fmt.Sprintf("%s/api/where/stops-for-location.json", c.BaseURL)
-	
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -536,7 +536,7 @@ func (c *OneBusAwayClient) ProcessArrivals(obaResp *models.OneBusAwayResponse) [
 		}
 
 		arrival := models.Arrival{
-			RouteShortName:        ad.RouteShortName,
+			RouteShortName:       ad.RouteShortName,
 			TripHeadsign:         ad.TripHeadsign,
 			PredictedArrivalTime: ad.PredictedArrivalTime,
 			ScheduledArrivalTime: ad.ScheduledArrivalTime,

@@ -114,7 +114,7 @@ func TestGetStopInfo_InvalidResponse(t *testing.T) {
 			defer server.Close()
 
 			client := NewOneBusAwayClient(server.URL, "test-key")
-			
+
 			_, err := client.GetStopInfo("1_12345")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -124,10 +124,10 @@ func TestGetStopInfo_InvalidResponse(t *testing.T) {
 
 func TestInitializeCoverage_InvalidCoordinates(t *testing.T) {
 	tests := []struct {
-		name     string
-		lat      float64
-		lon      float64
-		wantErr  string
+		name    string
+		lat     float64
+		lon     float64
+		wantErr string
 	}{
 		{
 			name:    "Invalid latitude too high",
@@ -160,7 +160,7 @@ func TestInitializeCoverage_InvalidCoordinates(t *testing.T) {
 			mockResponse := models.AgenciesWithCoverageResponse{
 				Data: struct {
 					LimitExceeded bool `json:"limitExceeded"`
-					List []struct {
+					List          []struct {
 						AgencyID string  `json:"agencyId"`
 						Lat      float64 `json:"lat"`
 						LatSpan  float64 `json:"latSpan"`
@@ -195,7 +195,7 @@ func TestInitializeCoverage_InvalidCoordinates(t *testing.T) {
 			defer server.Close()
 
 			client := NewOneBusAwayClient(server.URL, "test-key")
-			
+
 			err := client.InitializeCoverage()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -207,15 +207,15 @@ func TestSearchStops_InvalidCoordinates(t *testing.T) {
 	mockStopData := models.StopData{
 		Data: struct {
 			List []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
+				ID   string  `json:"id"`
+				Name string  `json:"name"`
 				Lat  float64 `json:"lat"`
 				Lon  float64 `json:"lon"`
 			} `json:"list"`
 		}{
 			List: []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
+				ID   string  `json:"id"`
+				Name string  `json:"name"`
 				Lat  float64 `json:"lat"`
 				Lon  float64 `json:"lon"`
 			}{
@@ -238,14 +238,14 @@ func TestSearchStops_InvalidCoordinates(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	// Initialize with valid coverage first
 	client.coverageArea = &models.CoverageArea{
 		CenterLat: 47.6062,
 		CenterLon: -122.3321,
 		Radius:    25000.0,
 	}
-	
+
 	_, err := client.SearchStops("test")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid latitude")
@@ -256,7 +256,7 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 		Data: struct {
 			Entry struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -273,7 +273,7 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 		}{
 			Entry: struct {
 				ArrivalsAndDepartures []struct {
-					RouteShortName        string `json:"routeShortName"`
+					RouteShortName       string `json:"routeShortName"`
 					TripHeadsign         string `json:"tripHeadsign"`
 					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
 					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
@@ -294,7 +294,7 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 					Lat       float64 `json:"lat"`
 					Lon       float64 `json:"lon"`
 				}{
-					ID: "", // Missing stop ID
+					ID:   "", // Missing stop ID
 					Name: "Test Stop",
 				},
 			},
@@ -309,7 +309,7 @@ func TestGetArrivalsAndDepartures_MissingStopInfo(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	_, err := client.GetArrivalsAndDepartures("1_12345")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing stop information")

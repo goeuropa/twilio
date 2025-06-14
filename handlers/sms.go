@@ -42,7 +42,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	}
 
 	log.Printf("Received SMS from %s: %s", req.From, req.Body)
-	
+
 	c.Header("Content-Type", "text/xml")
 
 	// Check if user is responding to a disambiguation request
@@ -87,7 +87,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	// If multiple stops found, ask user to disambiguate
 	if len(matchingStops) > 1 {
 		disambiguationMsg := formatters.FormatDisambiguationMessage(matchingStops, stopID)
-		
+
 		// Store disambiguation session
 		session := &models.DisambiguationSession{
 			StopOptions: matchingStops,
@@ -98,7 +98,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 			c.String(http.StatusOK, twiml)
 			return
 		}
-		
+
 		twiml, _ := formatters.GenerateTwiMLSMS(disambiguationMsg)
 		c.String(http.StatusOK, twiml)
 		return
@@ -124,9 +124,9 @@ func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.Twili
 
 	selectedStop := session.StopOptions[choice-1]
 	h.SessionStore.ClearDisambiguationSession(req.From)
-	
+
 	log.Printf("User %s selected stop %s: %s", req.From, selectedStop.FullStopID, selectedStop.DisplayText)
-	
+
 	h.getAndFormatArrivals(c, selectedStop.FullStopID)
 }
 
@@ -140,10 +140,10 @@ func (h *SMSHandler) getAndFormatArrivals(c *gin.Context, fullStopID string) {
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
-	stopName := obaResp.Data.Entry.Stop.Name
+	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME //obaResp.Data.Entry.Stop.Name
 
 	message := formatters.FormatSMSResponse(arrivals, stopName)
-	
+
 	twiml, err := formatters.GenerateTwiMLSMS(message)
 	if err != nil {
 		log.Printf("Failed to generate TwiML: %v", err)

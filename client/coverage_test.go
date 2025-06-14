@@ -17,7 +17,7 @@ func TestInitializeCoverage_Success(t *testing.T) {
 	mockResponse := models.AgenciesWithCoverageResponse{
 		Data: struct {
 			LimitExceeded bool `json:"limitExceeded"`
-			List []struct {
+			List          []struct {
 				AgencyID string  `json:"agencyId"`
 				Lat      float64 `json:"lat"`
 				LatSpan  float64 `json:"latSpan"`
@@ -56,36 +56,36 @@ func TestInitializeCoverage_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Contains(t, r.URL.Path, "agencies-with-coverage")
 		assert.Equal(t, "test-key", r.URL.Query().Get("key"))
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	err := client.InitializeCoverage()
 	assert.NoError(t, err)
-	
+
 	coverage := client.GetCoverageArea()
 	assert.NotNil(t, coverage)
-	
+
 	// Center should be the midpoint of all agencies
 	// Agency 1: lat 47.6062±0.25, lon -122.3321±0.4 -> bounds: lat[47.3562, 47.8562], lon[-122.7321, -121.9321]
 	// Agency 2: lat 47.5±0.15, lon -122.2±0.2 -> bounds: lat[47.35, 47.65], lon[-122.4, -122.0]
 	// Combined bounds: lat[47.35, 47.8562], lon[-122.7321, -121.9321]
 	// Center: lat=(47.35+47.8562)/2=47.6031, lon=(-122.7321+-121.9321)/2=-122.3321
-	assert.InDelta(t, 47.6031, coverage.CenterLat, 0.01) 
-	assert.InDelta(t, -122.3321, coverage.CenterLon, 0.01) 
-	assert.Greater(t, coverage.Radius, 5000.0) 
-	assert.Less(t, coverage.Radius, 100000.0) 
+	assert.InDelta(t, 47.6031, coverage.CenterLat, 0.01)
+	assert.InDelta(t, -122.3321, coverage.CenterLon, 0.01)
+	assert.Greater(t, coverage.Radius, 5000.0)
+	assert.Less(t, coverage.Radius, 100000.0)
 }
 
 func TestInitializeCoverage_SingleAgency(t *testing.T) {
 	mockResponse := models.AgenciesWithCoverageResponse{
 		Data: struct {
 			LimitExceeded bool `json:"limitExceeded"`
-			List []struct {
+			List          []struct {
 				AgencyID string  `json:"agencyId"`
 				Lat      float64 `json:"lat"`
 				LatSpan  float64 `json:"latSpan"`
@@ -120,23 +120,23 @@ func TestInitializeCoverage_SingleAgency(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	err := client.InitializeCoverage()
 	assert.NoError(t, err)
-	
+
 	coverage := client.GetCoverageArea()
 	assert.NotNil(t, coverage)
-	
+
 	assert.InDelta(t, 38.5553, coverage.CenterLat, 0.01)
 	assert.InDelta(t, -121.7360, coverage.CenterLon, 0.01)
-	assert.GreaterOrEqual(t, coverage.Radius, 5000.0) 
+	assert.GreaterOrEqual(t, coverage.Radius, 5000.0)
 }
 
 func TestInitializeCoverage_NoAgencies(t *testing.T) {
 	mockResponse := models.AgenciesWithCoverageResponse{
 		Data: struct {
 			LimitExceeded bool `json:"limitExceeded"`
-			List []struct {
+			List          []struct {
 				AgencyID string  `json:"agencyId"`
 				Lat      float64 `json:"lat"`
 				LatSpan  float64 `json:"latSpan"`
@@ -163,7 +163,7 @@ func TestInitializeCoverage_NoAgencies(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	err := client.InitializeCoverage()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no coverage areas found")
@@ -176,7 +176,7 @@ func TestInitializeCoverage_APIError(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	err := client.InitializeCoverage()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
@@ -184,7 +184,7 @@ func TestInitializeCoverage_APIError(t *testing.T) {
 
 func TestCalculateRadius(t *testing.T) {
 	client := NewOneBusAwayClient("test", "test")
-	
+
 	tests := []struct {
 		name      string
 		latSpan   float64
@@ -232,15 +232,15 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 	mockStopData := models.StopData{
 		Data: struct {
 			List []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
+				ID   string  `json:"id"`
+				Name string  `json:"name"`
 				Lat  float64 `json:"lat"`
 				Lon  float64 `json:"lon"`
 			} `json:"list"`
 		}{
 			List: []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
+				ID   string  `json:"id"`
+				Name string  `json:"name"`
 				Lat  float64 `json:"lat"`
 				Lon  float64 `json:"lon"`
 			}{
@@ -261,7 +261,7 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 			mockCoverage := models.AgenciesWithCoverageResponse{
 				Data: struct {
 					LimitExceeded bool `json:"limitExceeded"`
-					List []struct {
+					List          []struct {
 						AgencyID string  `json:"agencyId"`
 						Lat      float64 `json:"lat"`
 						LatSpan  float64 `json:"latSpan"`
@@ -295,7 +295,7 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 			assert.NotEmpty(t, r.URL.Query().Get("lat"))
 			assert.NotEmpty(t, r.URL.Query().Get("lon"))
 			assert.NotEmpty(t, r.URL.Query().Get("radius"))
-			
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(mockStopData)
 		}
@@ -303,10 +303,10 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	err := client.InitializeCoverage()
 	assert.NoError(t, err)
-	
+
 	stops, err := client.SearchStops("test search")
 	assert.NoError(t, err)
 	assert.Len(t, stops, 1)
@@ -316,7 +316,7 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 
 func TestSearchStops_WithoutCoverage(t *testing.T) {
 	client := NewOneBusAwayClient("test", "test-key")
-	
+
 	_, err := client.SearchStops("test")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "coverage area not initialized")
@@ -324,7 +324,7 @@ func TestSearchStops_WithoutCoverage(t *testing.T) {
 
 func TestCalculateCoverageArea_EmptyAgencies(t *testing.T) {
 	client := NewOneBusAwayClient("test", "test")
-	
+
 	agencies := []struct {
 		AgencyID string  `json:"agencyId"`
 		Lat      float64 `json:"lat"`
@@ -332,9 +332,9 @@ func TestCalculateCoverageArea_EmptyAgencies(t *testing.T) {
 		Lon      float64 `json:"lon"`
 		LonSpan  float64 `json:"lonSpan"`
 	}{}
-	
+
 	coverage := client.calculateCoverageArea(agencies)
-	
+
 	assert.Equal(t, 47.6062, coverage.CenterLat)
 	assert.Equal(t, -122.3321, coverage.CenterLon)
 	assert.Equal(t, 25000.0, coverage.Radius)
@@ -405,7 +405,7 @@ func TestFindAllMatchingStops_SingleMatch(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	stops, err := client.FindAllMatchingStops("12345")
 	assert.NoError(t, err)
 	assert.Len(t, stops, 1)
@@ -535,15 +535,15 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	stops, err := client.FindAllMatchingStops("12345")
 	assert.NoError(t, err)
 	assert.Len(t, stops, 2)
-	
+
 	// Results may come back in different order due to concurrent requests
 	foundMetro := false
 	foundSoundTransit := false
-	
+
 	for _, stop := range stops {
 		if stop.FullStopID == "1_12345" {
 			assert.Equal(t, "King County Metro", stop.AgencyName)
@@ -555,14 +555,14 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 			foundSoundTransit = true
 		}
 	}
-	
+
 	assert.True(t, foundMetro, "Should find Metro stop")
 	assert.True(t, foundSoundTransit, "Should find Sound Transit stop")
 }
 
 func TestGetAgencyNameFromID(t *testing.T) {
 	client := NewOneBusAwayClient("test", "test")
-	
+
 	tests := []struct {
 		stopID   string
 		agencies []struct {
@@ -582,7 +582,7 @@ func TestGetAgencyNameFromID(t *testing.T) {
 			expected: "King County Metro",
 		},
 		{
-			stopID:   "40_12345",
+			stopID: "40_12345",
 			agencies: []struct {
 				ID   string `json:"id"`
 				Name string `json:"name"`
@@ -590,7 +590,7 @@ func TestGetAgencyNameFromID(t *testing.T) {
 			expected: "Sound Transit",
 		},
 		{
-			stopID:   "invalid",
+			stopID: "invalid",
 			agencies: []struct {
 				ID   string `json:"id"`
 				Name string `json:"name"`
@@ -598,7 +598,7 @@ func TestGetAgencyNameFromID(t *testing.T) {
 			expected: "Unknown",
 		},
 		{
-			stopID:   "99_12345",
+			stopID: "99_12345",
 			agencies: []struct {
 				ID   string `json:"id"`
 				Name string `json:"name"`
@@ -618,7 +618,7 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Sleep longer than the API timeout to trigger timeout mechanism
 		time.Sleep(35 * time.Second) // apiTimeoutSeconds = 30
-		
+
 		mockStopResp := struct {
 			Data struct {
 				Entry struct {
@@ -671,23 +671,23 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 			Code: 200,
 			Text: "OK",
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mockStopResp)
 	}))
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
-	
+
 	// This test should complete quickly due to timeout mechanism
 	// even though the server would take 35 seconds to respond
 	start := time.Now()
 	stops, err := client.FindAllMatchingStops("12345")
 	duration := time.Since(start)
-	
+
 	// Should complete within reasonable time due to timeout
 	assert.Less(t, duration, 32*time.Second, "FindAllMatchingStops should timeout after ~30 seconds")
-	
+
 	// Should return empty results due to timeout
 	assert.NoError(t, err)
 	assert.Empty(t, stops, "Should return empty results when timing out")

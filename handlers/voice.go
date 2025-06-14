@@ -34,7 +34,7 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	log.Printf("Received voice call from %s", req.From)
 
 	prompt := "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key."
-	
+
 	c.Header("Content-Type", "text/xml")
 	twiml, err := formatters.GenerateTwiMLGather(prompt, "/voice/input", 6)
 	if err != nil {
@@ -85,7 +85,7 @@ func (h *VoiceHandler) HandleVoiceInput(c *gin.Context) {
 	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME // obaResp.Data.Entry.Stop.Name
 
 	message := formatters.FormatVoiceResponse(arrivals, stopName)
-	
+
 	c.Header("Content-Type", "text/xml")
 	twiml, err := formatters.GenerateTwiMLVoice(message)
 	if err != nil {

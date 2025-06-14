@@ -154,7 +154,7 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 	mockStopOptions := []models.StopOption{
 		{
 			FullStopID:  "1_75403",
-			AgencyName:  "King County Metro", 
+			AgencyName:  "King County Metro",
 			StopName:    "Test Stop",
 			DisplayText: "King County Metro: Test Stop",
 		},

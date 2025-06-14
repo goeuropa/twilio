@@ -13,34 +13,34 @@ func TestFormatSMSResponse(t *testing.T) {
 	arrivals := []models.Arrival{
 		{
 			RouteShortName:      "8",
-			TripHeadsign:       "Seattle Center",
+			TripHeadsign:        "Seattle Center",
 			MinutesUntilArrival: 3,
 		},
 		{
 			RouteShortName:      "43",
-			TripHeadsign:       "Capitol Hill",
+			TripHeadsign:        "Capitol Hill",
 			MinutesUntilArrival: 8,
 		},
 		{
 			RouteShortName:      "49",
-			TripHeadsign:       "U District",
+			TripHeadsign:        "U District",
 			MinutesUntilArrival: 12,
 		},
 		{
 			RouteShortName:      "50",
-			TripHeadsign:       "Fremont",
+			TripHeadsign:        "Fremont",
 			MinutesUntilArrival: 15,
 		},
 	}
 
 	result := FormatSMSResponse(arrivals, "Pine St & 3rd Ave")
-	
+
 	assert.Contains(t, result, "Pine St & 3rd Ave")
 	assert.Contains(t, result, "Route 8 to Seattle Center: 3 min")
 	assert.Contains(t, result, "Route 43 to Capitol Hill: 8 min")
 	assert.Contains(t, result, "Route 49 to U District: 12 min")
 	assert.NotContains(t, result, "Route 50")
-	
+
 	lines := strings.Split(result, "\n")
 	assert.Equal(t, 4, len(lines))
 }
@@ -54,18 +54,18 @@ func TestFormatVoiceResponse(t *testing.T) {
 	arrivals := []models.Arrival{
 		{
 			RouteShortName:      "8",
-			TripHeadsign:       "Seattle Center",
+			TripHeadsign:        "Seattle Center",
 			MinutesUntilArrival: 3,
 		},
 		{
 			RouteShortName:      "43",
-			TripHeadsign:       "Capitol Hill",
+			TripHeadsign:        "Capitol Hill",
 			MinutesUntilArrival: 1,
 		},
 	}
 
 	result := FormatVoiceResponse(arrivals, "Pine St & 3rd Ave")
-	
+
 	assert.Contains(t, result, "Arrivals for Pine St & 3rd Ave")
 	assert.Contains(t, result, "Route 8 to Seattle Center in 3 minutes")
 	assert.Contains(t, result, "Route 43 to Capitol Hill in 1 minute")
@@ -73,7 +73,7 @@ func TestFormatVoiceResponse(t *testing.T) {
 
 func TestGenerateTwiMLSMS(t *testing.T) {
 	result, err := GenerateTwiMLSMS("Test message")
-	
+
 	assert.NoError(t, err)
 	assert.Contains(t, result, "<?xml version=\"1.0\"")
 	assert.Contains(t, result, "<Response>")
@@ -83,7 +83,7 @@ func TestGenerateTwiMLSMS(t *testing.T) {
 
 func TestGenerateTwiMLVoice(t *testing.T) {
 	result, err := GenerateTwiMLVoice("Test voice message")
-	
+
 	assert.NoError(t, err)
 	assert.Contains(t, result, "<?xml version=\"1.0\"")
 	assert.Contains(t, result, "<Response>")
@@ -93,7 +93,7 @@ func TestGenerateTwiMLVoice(t *testing.T) {
 
 func TestGenerateTwiMLGather(t *testing.T) {
 	result, err := GenerateTwiMLGather("Enter digits", "/input", 5)
-	
+
 	assert.NoError(t, err)
 	assert.Contains(t, result, "<?xml version=\"1.0\"")
 	assert.Contains(t, result, "<Response>")
@@ -184,7 +184,7 @@ func TestIsDisambiguationChoice(t *testing.T) {
 		{" 1 ", 1},
 		{" 10 ", 10},
 		{"", 0},
-		{"01", 1},  // Leading zero should still work
+		{"01", 1},                 // Leading zero should still work
 		{"999999999999999999", 0}, // Overflow protection
 	}
 
@@ -196,9 +196,9 @@ func TestIsDisambiguationChoice(t *testing.T) {
 
 func TestFormatDisambiguationMessage(t *testing.T) {
 	tests := []struct {
-		name         string
-		stopOptions  []models.StopOption
-		originalID   string
+		name             string
+		stopOptions      []models.StopOption
+		originalID       string
 		expectedContains []string
 	}{
 		{
@@ -237,7 +237,7 @@ func TestFormatDisambiguationMessage(t *testing.T) {
 					DisplayText: "King County Metro: Pine St & 3rd Ave",
 				},
 			},
-			originalID: "12345",
+			originalID:       "12345",
 			expectedContains: []string{},
 		},
 	}
@@ -245,7 +245,7 @@ func TestFormatDisambiguationMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := FormatDisambiguationMessage(tt.stopOptions, tt.originalID)
-			
+
 			if len(tt.stopOptions) == 1 {
 				assert.Empty(t, result)
 			} else {
