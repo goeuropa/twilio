@@ -26,6 +26,12 @@ const (
 	// cacheTTLMinutes defines how long to cache API responses
 	cacheTTLMinutes = 5
 
+	// arrivalsCacheTTLMinutes defines how long to cache arrival data (shorter due to time-sensitive nature)
+	arrivalsCacheTTLMinutes = 1
+
+	// coverageCacheTTLMinutes defines how long to cache coverage data (longer as it changes infrequently)
+	coverageCacheTTLMinutes = 60
+
 	// maxCacheEntries limits the number of cached responses
 	maxCacheEntries = 1000
 )
@@ -114,12 +120,25 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 }
 
 func (c *OneBusAwayClient) InitializeCoverage() error {
+	// Check cache first
+	cacheKey := "coverage_areas"
+	if cached, found := c.cache.Get(cacheKey); found {
+		if coverageArea, ok := cached.(*models.CoverageArea); ok {
+			c.coverageArea = coverageArea
+			return nil
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
+	// Add cache-control headers
+	req.Header.Set("Cache-Control", "max-age=3600")
+	req.Header.Set("User-Agent", "oba-twilio/1.0")
 
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
@@ -162,6 +181,10 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 	}
 
 	c.coverageArea = c.calculateCoverageArea(coverageResp.Data.List)
+
+	// Cache the result
+	c.cache.Set(cacheKey, c.coverageArea, coverageCacheTTLMinutes*time.Minute)
+
 	return nil
 }
 
@@ -261,12 +284,24 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 		return nil, fmt.Errorf("failed to resolve stop ID: %w", err)
 	}
 
+	// Check cache first
+	cacheKey := fmt.Sprintf("arrivals:%s", fullStopID)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if obaResp, ok := cached.(*models.OneBusAwayResponse); ok {
+			return obaResp, nil
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/arrivals-and-departures-for-stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
+	// Add cache-control headers for arrivals (shorter cache due to time-sensitive data)
+	req.Header.Set("Cache-Control", "max-age=60")
+	req.Header.Set("User-Agent", "oba-twilio/1.0")
 
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
@@ -297,6 +332,9 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 	if obaResp.Data.Entry.StopId == "" {
 		return nil, fmt.Errorf("invalid response: missing stop information")
 	}
+
+	// Cache the result with shorter TTL for time-sensitive data
+	c.cache.Set(cacheKey, &obaResp, arrivalsCacheTTLMinutes*time.Minute)
 
 	return &obaResp, nil
 }
@@ -457,6 +495,10 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// Add cache-control headers
+	req.Header.Set("Cache-Control", "max-age=300")
+	req.Header.Set("User-Agent", "oba-twilio/1.0")
+
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
 	req.URL.RawQuery = q.Encode()
@@ -558,12 +600,24 @@ func (c *OneBusAwayClient) getAgencyNameFromID(stopID string, agencies []struct 
 }
 
 func (c *OneBusAwayClient) stopExists(stopID string) bool {
+	// Check cache first
+	cacheKey := fmt.Sprintf("stop_exists:%s", stopID)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if exists, ok := cached.(bool); ok {
+			return exists
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(stopID))
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return false
 	}
+
+	// Add cache-control headers
+	req.Header.Set("Cache-Control", "max-age=300")
+	req.Header.Set("User-Agent", "oba-twilio/1.0")
 
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
@@ -575,7 +629,12 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK
+	exists := resp.StatusCode == http.StatusOK
+
+	// Cache the result
+	c.cache.Set(cacheKey, exists, cacheTTLMinutes*time.Minute)
+
+	return exists
 }
 
 func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
@@ -584,12 +643,24 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 		return nil, fmt.Errorf("coverage area not initialized - call InitializeCoverage() first")
 	}
 
+	// Check cache first
+	cacheKey := fmt.Sprintf("search_stops:%s", query)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if stops, ok := cached.([]models.Stop); ok {
+			return stops, nil
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/stops-for-location.json", c.BaseURL)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
+	// Add cache-control headers
+	req.Header.Set("Cache-Control", "max-age=300")
+	req.Header.Set("User-Agent", "oba-twilio/1.0")
 
 	q := req.URL.Query()
 	q.Add("key", c.APIKey)
@@ -640,6 +711,9 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 			Longitude: s.Lon,
 		}
 	}
+
+	// Cache the result
+	c.cache.Set(cacheKey, stops, cacheTTLMinutes*time.Minute)
 
 	return stops, nil
 }
