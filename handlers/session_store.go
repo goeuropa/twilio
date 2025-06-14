@@ -13,29 +13,57 @@ import (
 const (
 	sessionTimeoutMinutes  = 10
 	cleanupIntervalMinutes = 5
+	maxSessions            = 10000
 )
 
 var phoneRegex = regexp.MustCompile(`^\+1\d{10}$`)
 
 type SessionStore struct {
-	sessions  map[string]*models.DisambiguationSession
-	mutex     sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	closeOnce sync.Once
+	sessions    map[string]*models.DisambiguationSession
+	accessTimes map[string]int64 // Track last access time for LRU
+	mutex       sync.RWMutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	closeOnce   sync.Once
 }
 
 func NewSessionStore() *SessionStore {
 	ctx, cancel := context.WithCancel(context.Background())
 	store := &SessionStore{
-		sessions: make(map[string]*models.DisambiguationSession),
-		ctx:      ctx,
-		cancel:   cancel,
+		sessions:    make(map[string]*models.DisambiguationSession),
+		accessTimes: make(map[string]int64),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
 
 	go store.cleanupExpiredSessions()
 
 	return store
+}
+
+// evictOldestSession removes the least recently used session
+func (s *SessionStore) evictOldestSession() {
+	var oldestPhone string
+	var oldestTime int64 = time.Now().Unix()
+
+	for phone, accessTime := range s.accessTimes {
+		if accessTime < oldestTime {
+			oldestTime = accessTime
+			oldestPhone = phone
+		}
+	}
+
+	if oldestPhone != "" {
+		delete(s.sessions, oldestPhone)
+		delete(s.accessTimes, oldestPhone)
+	}
+}
+
+// GetSessionCount returns the current number of active sessions
+func (s *SessionStore) GetSessionCount() int {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return len(s.sessions)
 }
 
 func (s *SessionStore) SetDisambiguationSession(phoneNumber string, session *models.DisambiguationSession) error {
@@ -46,8 +74,15 @@ func (s *SessionStore) SetDisambiguationSession(phoneNumber string, session *mod
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	session.CreatedAt = time.Now().Unix()
+	// Check session limit and evict oldest if necessary
+	if len(s.sessions) >= maxSessions {
+		s.evictOldestSession()
+	}
+
+	now := time.Now().Unix()
+	session.CreatedAt = now
 	s.sessions[phoneNumber] = session
+	s.accessTimes[phoneNumber] = now
 	return nil
 }
 
@@ -56,27 +91,23 @@ func (s *SessionStore) GetDisambiguationSession(phoneNumber string) *models.Disa
 		return nil // Invalid phone number format
 	}
 
-	s.mutex.RLock()
+	s.mutex.Lock() // Use write lock for simplicity and to update access time
+	defer s.mutex.Unlock()
+
 	session, exists := s.sessions[phoneNumber]
 	if !exists {
-		s.mutex.RUnlock()
 		return nil
 	}
 
-	// Check expiry while holding read lock
+	// Check expiry and clean up in single critical section
 	if time.Now().Unix()-session.CreatedAt > sessionTimeoutMinutes*60 {
-		s.mutex.RUnlock()
-		// Upgrade to write lock to delete expired session
-		s.mutex.Lock()
-		// Double-check in case another goroutine already deleted it
-		if existingSession, stillExists := s.sessions[phoneNumber]; stillExists &&
-			time.Now().Unix()-existingSession.CreatedAt > sessionTimeoutMinutes*60 {
-			delete(s.sessions, phoneNumber)
-		}
-		s.mutex.Unlock()
+		delete(s.sessions, phoneNumber)
+		delete(s.accessTimes, phoneNumber)
 		return nil
 	}
-	s.mutex.RUnlock()
+
+	// Update access time for LRU
+	s.accessTimes[phoneNumber] = time.Now().Unix()
 
 	return session
 }
@@ -86,6 +117,7 @@ func (s *SessionStore) ClearDisambiguationSession(phoneNumber string) {
 	defer s.mutex.Unlock()
 
 	delete(s.sessions, phoneNumber)
+	delete(s.accessTimes, phoneNumber)
 }
 
 func (s *SessionStore) Close() {
@@ -109,6 +141,7 @@ func (s *SessionStore) cleanupExpiredSessions() {
 			for phoneNumber, session := range s.sessions {
 				if now-session.CreatedAt > sessionTimeoutMinutes*60 {
 					delete(s.sessions, phoneNumber)
+					delete(s.accessTimes, phoneNumber)
 				}
 			}
 			s.mutex.Unlock()
