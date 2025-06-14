@@ -136,6 +136,35 @@ func getDefaultConfig() *ClientConfig {
 	}
 }
 
+// validateConfig validates the client configuration for required fields and data integrity
+func validateConfig(config *ClientConfig) error {
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	if len(config.DefaultAgencies) == 0 {
+		return fmt.Errorf("DefaultAgencies cannot be empty")
+	}
+
+	// Validate that all agency IDs are non-empty strings
+	for i, agency := range config.DefaultAgencies {
+		if strings.TrimSpace(agency) == "" {
+			return fmt.Errorf("DefaultAgencies[%d] cannot be empty", i)
+		}
+	}
+
+	// If AgencyPriority is provided, validate it as well
+	if config.AgencyPriority != nil {
+		for i, agency := range config.AgencyPriority {
+			if strings.TrimSpace(agency) == "" {
+				return fmt.Errorf("AgencyPriority[%d] cannot be empty", i)
+			}
+		}
+	}
+
+	return nil
+}
+
 // CacheEntry represents a cached API response with expiration
 type CacheEntry struct {
 	Data      interface{}
@@ -224,10 +253,15 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 }
 
 // NewOneBusAwayClientWithConfig creates a client with custom configuration
-func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig) *OneBusAwayClient {
+func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig) (*OneBusAwayClient, error) {
 	if config == nil {
 		config = getDefaultConfig()
 	}
+
+	if err := validateConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	return &OneBusAwayClient{
 		BaseURL: baseURL,
 		APIKey:  apiKey,
@@ -237,7 +271,7 @@ func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig)
 		cache:          NewAPICache(),
 		config:         config,
 		circuitBreaker: NewCircuitBreaker(),
-	}
+	}, nil
 }
 
 // getAgencyList returns the configured agency list with priority ordering
@@ -249,11 +283,24 @@ func (c *OneBusAwayClient) getAgencyList() []string {
 }
 
 // SetAgencyPriority allows runtime configuration of agency priority
-func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) {
+func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) error {
 	if c.config == nil {
 		c.config = getDefaultConfig()
 	}
+
+	// Validate the provided agencies
+	if len(agencies) == 0 {
+		return fmt.Errorf("agencies list cannot be empty")
+	}
+
+	for i, agency := range agencies {
+		if strings.TrimSpace(agency) == "" {
+			return fmt.Errorf("agency[%d] cannot be empty", i)
+		}
+	}
+
 	c.config.AgencyPriority = agencies
+	return nil
 }
 
 func (c *OneBusAwayClient) InitializeCoverage() error {
