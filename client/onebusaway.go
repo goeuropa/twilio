@@ -36,6 +36,20 @@ const (
 	maxCacheEntries = 1000
 )
 
+// ClientConfig holds configuration for the OneBusAway client
+type ClientConfig struct {
+	AgencyPriority  []string `json:"agency_priority"`
+	DefaultAgencies []string `json:"default_agencies"`
+}
+
+// getDefaultConfig returns the default configuration with standard agency priorities
+func getDefaultConfig() *ClientConfig {
+	return &ClientConfig{
+		AgencyPriority:  []string{"1", "40", "29", "95", "97", "98", "3", "23"},
+		DefaultAgencies: []string{"1", "40", "29", "95", "97", "98", "3", "23"},
+	}
+}
+
 // CacheEntry represents a cached API response with expiration
 type CacheEntry struct {
 	Data      interface{}
@@ -106,6 +120,7 @@ type OneBusAwayClient struct {
 	Client       *http.Client
 	coverageArea *models.CoverageArea
 	cache        *APICache
+	config       *ClientConfig
 }
 
 func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
@@ -115,8 +130,41 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		cache: NewAPICache(),
+		cache:  NewAPICache(),
+		config: getDefaultConfig(),
 	}
+}
+
+// NewOneBusAwayClientWithConfig creates a client with custom configuration
+func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig) *OneBusAwayClient {
+	if config == nil {
+		config = getDefaultConfig()
+	}
+	return &OneBusAwayClient{
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		cache:  NewAPICache(),
+		config: config,
+	}
+}
+
+// getAgencyList returns the configured agency list with priority ordering
+func (c *OneBusAwayClient) getAgencyList() []string {
+	if c.config.AgencyPriority != nil && len(c.config.AgencyPriority) > 0 {
+		return c.config.AgencyPriority
+	}
+	return c.config.DefaultAgencies
+}
+
+// SetAgencyPriority allows runtime configuration of agency priority
+func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) {
+	if c.config == nil {
+		c.config = getDefaultConfig()
+	}
+	c.config.AgencyPriority = agencies
 }
 
 func (c *OneBusAwayClient) InitializeCoverage() error {
@@ -349,7 +397,7 @@ func (c *OneBusAwayClient) resolveStopID(stopID string) (string, error) {
 		return stopID, nil
 	}
 
-	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
+	agencies := c.getAgencyList()
 
 	for _, agency := range agencies {
 		fullStopID := fmt.Sprintf("%s_%s", agency, stopID)
@@ -389,7 +437,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 	}
 
 	// Order agencies by likelihood (most common first based on typical transit systems)
-	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
+	agencies := c.getAgencyList()
 
 	// Use context for proper timeout and cancellation
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(apiTimeoutSeconds)*time.Second)
