@@ -305,6 +305,20 @@ func (c *APICache) Get(key string) (interface{}, bool) {
 	return entry.Data, true
 }
 
+// GetExpired retrieves a cached entry even if it has expired (for graceful degradation)
+func (c *APICache) GetExpired(key string) (interface{}, bool, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	entry, exists := c.entries[key]
+	if !exists {
+		return nil, false, false
+	}
+
+	expired := time.Now().After(entry.ExpiresAt)
+	return entry.Data, true, expired
+}
+
 // Set stores a value in the cache with TTL
 func (c *APICache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mutex.Lock()
@@ -475,6 +489,15 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 		if strings.Contains(err.Error(), "circuit breaker is open") {
 			c.metrics.IncrementCircuitBreakerOpen()
 		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if coverageArea, ok := cachedData.(*models.CoverageArea); ok {
+				c.coverageArea = coverageArea
+				return fmt.Errorf("using cached coverage data due to API failure: %w", err)
+			}
+		}
+
 		return err
 	}
 
@@ -659,6 +682,14 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 		if strings.Contains(err.Error(), "circuit breaker is open") {
 			c.metrics.IncrementCircuitBreakerOpen()
 		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if obaResp, ok := cachedData.(*models.OneBusAwayResponse); ok {
+				return obaResp, fmt.Errorf("using cached arrival data due to API failure: %w", err)
+			}
+		}
+
 		return nil, err
 	}
 
@@ -895,6 +926,14 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 		if strings.Contains(err.Error(), "circuit breaker is open") {
 			c.metrics.IncrementCircuitBreakerOpen()
 		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if stopOption, ok := cachedData.(*models.StopOption); ok {
+				return stopOption, fmt.Errorf("using cached stop info due to API failure: %w", err)
+			}
+		}
+
 		return nil, err
 	}
 
@@ -1013,6 +1052,14 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 		if strings.Contains(err.Error(), "circuit breaker is open") {
 			c.metrics.IncrementCircuitBreakerOpen()
 		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if cachedExists, ok := cachedData.(bool); ok {
+				return cachedExists
+			}
+		}
+
 		return false
 	}
 
@@ -1085,6 +1132,14 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 		if strings.Contains(err.Error(), "circuit breaker is open") {
 			c.metrics.IncrementCircuitBreakerOpen()
 		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if stops, ok := cachedData.([]models.Stop); ok {
+				return stops, fmt.Errorf("using cached search results due to API failure: %w", err)
+			}
+		}
+
 		return nil, err
 	}
 
