@@ -329,7 +329,8 @@ func (c *OneBusAwayClient) calculateRadius(latSpan, lonSpan, centerLat float64) 
 func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneBusAwayResponse, error) {
 	fullStopID, err := c.resolveStopID(stopID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve stop ID: %w", err)
+		// Pass through the already structured error
+		return nil, err
 	}
 
 	// Check cache first
@@ -390,7 +391,7 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 func (c *OneBusAwayClient) resolveStopID(stopID string) (string, error) {
 	stopID = strings.TrimSpace(stopID)
 	if stopID == "" {
-		return "", fmt.Errorf("stop ID cannot be empty")
+		return "", models.NewInvalidStopIDError("", fmt.Errorf("stop ID cannot be empty"))
 	}
 
 	if strings.Contains(stopID, "_") {
@@ -412,7 +413,7 @@ func (c *OneBusAwayClient) resolveStopID(stopID string) (string, error) {
 func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
 	stopID = strings.TrimSpace(stopID)
 	if stopID == "" {
-		return nil, fmt.Errorf("stop ID cannot be empty")
+		return nil, models.NewInvalidStopIDError("", fmt.Errorf("stop ID cannot be empty"))
 	}
 
 	// Check cache first
@@ -540,7 +541,7 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, models.NewInternalError("failed to create HTTP request", err)
 	}
 
 	// Add cache-control headers
@@ -553,12 +554,18 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, models.NewNetworkError("failed to communicate with OneBusAway API", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, models.NewStopNotFoundError(fullStopID, nil)
+	}
+	if resp.StatusCode >= 500 {
+		return nil, models.NewServiceUnavailableError(fmt.Sprintf("API returned status %d", resp.StatusCode), nil)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, models.NewInvalidResponseError(fmt.Sprintf("unexpected status code %d", resp.StatusCode), nil)
 	}
 
 	var stopResp struct {
@@ -579,18 +586,21 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stopResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, models.NewInvalidResponseError("failed to decode JSON response", err)
 	}
 
 	// Validate API response structure
 	if stopResp.Code != 200 {
-		return nil, fmt.Errorf("API error: %s (code %d)", stopResp.Text, stopResp.Code)
+		if stopResp.Code == 404 {
+			return nil, models.NewStopNotFoundError(fullStopID, nil)
+		}
+		return nil, models.NewServiceUnavailableError(fmt.Sprintf("API error: %s (code %d)", stopResp.Text, stopResp.Code), nil)
 	}
 	if stopResp.Data.Entry.ID == "" {
-		return nil, fmt.Errorf("invalid response: missing stop ID")
+		return nil, models.NewInvalidResponseError("missing stop ID in API response", nil)
 	}
 	if stopResp.Data.Entry.Name == "" {
-		return nil, fmt.Errorf("invalid response: missing stop name")
+		return nil, models.NewInvalidResponseError("missing stop name in API response", nil)
 	}
 
 	agencyName := c.getAgencyNameFromID(fullStopID, stopResp.Data.References.Agencies)
