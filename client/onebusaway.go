@@ -165,6 +165,115 @@ func validateConfig(config *ClientConfig) error {
 	return nil
 }
 
+// Metrics holds performance and operational metrics for the OneBusAway client
+type Metrics struct {
+	mutex              sync.RWMutex
+	CacheHits          int64         `json:"cache_hits"`
+	CacheMisses        int64         `json:"cache_misses"`
+	APICallCount       int64         `json:"api_call_count"`
+	APIErrorCount      int64         `json:"api_error_count"`
+	TotalResponseTime  time.Duration `json:"total_response_time"`
+	CircuitBreakerOpen int64         `json:"circuit_breaker_open"`
+	ValidationErrors   int64         `json:"validation_errors"`
+}
+
+// NewMetrics creates a new metrics instance
+func NewMetrics() *Metrics {
+	return &Metrics{}
+}
+
+// IncrementCacheHits increments the cache hit counter
+func (m *Metrics) IncrementCacheHits() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.CacheHits++
+}
+
+// IncrementCacheMisses increments the cache miss counter
+func (m *Metrics) IncrementCacheMisses() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.CacheMisses++
+}
+
+// IncrementAPICall increments the API call counter and records response time
+func (m *Metrics) IncrementAPICall(responseTime time.Duration) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.APICallCount++
+	m.TotalResponseTime += responseTime
+}
+
+// IncrementAPIError increments the API error counter
+func (m *Metrics) IncrementAPIError() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.APIErrorCount++
+}
+
+// IncrementCircuitBreakerOpen increments the circuit breaker open counter
+func (m *Metrics) IncrementCircuitBreakerOpen() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.CircuitBreakerOpen++
+}
+
+// IncrementValidationErrors increments the validation error counter
+func (m *Metrics) IncrementValidationErrors() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.ValidationErrors++
+}
+
+// GetMetrics returns a copy of the current metrics
+func (m *Metrics) GetMetrics() Metrics {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return Metrics{
+		CacheHits:          m.CacheHits,
+		CacheMisses:        m.CacheMisses,
+		APICallCount:       m.APICallCount,
+		APIErrorCount:      m.APIErrorCount,
+		TotalResponseTime:  m.TotalResponseTime,
+		CircuitBreakerOpen: m.CircuitBreakerOpen,
+		ValidationErrors:   m.ValidationErrors,
+	}
+}
+
+// GetCacheHitRate returns the cache hit rate as a percentage
+func (m *Metrics) GetCacheHitRate() float64 {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	total := m.CacheHits + m.CacheMisses
+	if total == 0 {
+		return 0.0
+	}
+	return float64(m.CacheHits) / float64(total) * 100.0
+}
+
+// GetAverageResponseTime returns the average API response time
+func (m *Metrics) GetAverageResponseTime() time.Duration {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	if m.APICallCount == 0 {
+		return 0
+	}
+	return m.TotalResponseTime / time.Duration(m.APICallCount)
+}
+
+// GetErrorRate returns the API error rate as a percentage
+func (m *Metrics) GetErrorRate() float64 {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	if m.APICallCount == 0 {
+		return 0.0
+	}
+	return float64(m.APIErrorCount) / float64(m.APICallCount) * 100.0
+}
+
 // CacheEntry represents a cached API response with expiration
 type CacheEntry struct {
 	Data      interface{}
@@ -237,6 +346,7 @@ type OneBusAwayClient struct {
 	cache          *APICache
 	config         *ClientConfig
 	circuitBreaker *CircuitBreaker
+	metrics        *Metrics
 }
 
 func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
@@ -249,6 +359,7 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 		cache:          NewAPICache(),
 		config:         getDefaultConfig(),
 		circuitBreaker: NewCircuitBreaker(),
+		metrics:        NewMetrics(),
 	}
 }
 
@@ -271,6 +382,7 @@ func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig)
 		cache:          NewAPICache(),
 		config:         config,
 		circuitBreaker: NewCircuitBreaker(),
+		metrics:        NewMetrics(),
 	}, nil
 }
 
@@ -290,11 +402,13 @@ func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) error {
 
 	// Validate the provided agencies
 	if len(agencies) == 0 {
+		c.metrics.IncrementValidationErrors()
 		return fmt.Errorf("agencies list cannot be empty")
 	}
 
 	for i, agency := range agencies {
 		if strings.TrimSpace(agency) == "" {
+			c.metrics.IncrementValidationErrors()
 			return fmt.Errorf("agency[%d] cannot be empty", i)
 		}
 	}
@@ -303,19 +417,27 @@ func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) error {
 	return nil
 }
 
+// GetMetrics returns the current performance metrics
+func (c *OneBusAwayClient) GetMetrics() Metrics {
+	return c.metrics.GetMetrics()
+}
+
 func (c *OneBusAwayClient) InitializeCoverage() error {
 	// Check cache first
 	cacheKey := "coverage_areas"
 	if cached, found := c.cache.Get(cacheKey); found {
 		if coverageArea, ok := cached.(*models.CoverageArea); ok {
+			c.metrics.IncrementCacheHits()
 			c.coverageArea = coverageArea
 			return nil
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
 
 	var coverageResp models.AgenciesWithCoverageResponse
+	startTime := time.Now()
 	err := c.circuitBreaker.Call(func() error {
 		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
@@ -346,9 +468,17 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 
 		return nil
 	})
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
 		return err
 	}
+
+	c.metrics.IncrementAPICall(responseTime)
 
 	// Validate API response structure
 	if coverageResp.Code != 200 {
@@ -480,13 +610,16 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 	cacheKey := fmt.Sprintf("arrivals:%s", fullStopID)
 	if cached, found := c.cache.Get(cacheKey); found {
 		if obaResp, ok := cached.(*models.OneBusAwayResponse); ok {
+			c.metrics.IncrementCacheHits()
 			return obaResp, nil
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	endpoint := fmt.Sprintf("%s/api/where/arrivals-and-departures-for-stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
 	var obaResp models.OneBusAwayResponse
+	startTime := time.Now()
 	err = c.circuitBreaker.Call(func() error {
 		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
@@ -519,9 +652,17 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 
 		return nil
 	})
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
 		return nil, err
 	}
+
+	c.metrics.IncrementAPICall(responseTime)
 
 	// Validate API response structure
 	if obaResp.Code != 200 {
@@ -570,9 +711,11 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 	cacheKey := fmt.Sprintf("matching_stops:%s", stopID)
 	if cached, found := c.cache.Get(cacheKey); found {
 		if stops, ok := cached.([]models.StopOption); ok {
+			c.metrics.IncrementCacheHits()
 			return stops, nil
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	if strings.Contains(stopID, "_") {
 		stopOption, err := c.GetStopInfo(stopID)
@@ -683,9 +826,11 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 	cacheKey := fmt.Sprintf("stop_info:%s", fullStopID)
 	if cached, found := c.cache.Get(cacheKey); found {
 		if stopOption, ok := cached.(*models.StopOption); ok {
+			c.metrics.IncrementCacheHits()
 			return stopOption, nil
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
@@ -706,6 +851,7 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 		Text string `json:"text"`
 	}
 
+	startTime := time.Now()
 	err := c.circuitBreaker.Call(func() error {
 		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 		if err != nil {
@@ -742,9 +888,17 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 
 		return nil
 	})
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
 		return nil, err
 	}
+
+	c.metrics.IncrementAPICall(responseTime)
 
 	// Validate API response structure
 	if stopResp.Code != 200 {
@@ -819,13 +973,16 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 	cacheKey := fmt.Sprintf("stop_exists:%s", stopID)
 	if cached, found := c.cache.Get(cacheKey); found {
 		if exists, ok := cached.(bool); ok {
+			c.metrics.IncrementCacheHits()
 			return exists
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(stopID))
 
 	var exists bool
+	startTime := time.Now()
 	err := c.circuitBreaker.Call(func() error {
 		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
@@ -849,9 +1006,17 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 		exists = resp.StatusCode == http.StatusOK
 		return nil
 	})
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
 		return false
 	}
+
+	c.metrics.IncrementAPICall(responseTime)
 
 	// Cache the result
 	c.cache.Set(cacheKey, exists, cacheTTLMinutes*time.Minute)
@@ -869,13 +1034,16 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 	cacheKey := fmt.Sprintf("search_stops:%s", query)
 	if cached, found := c.cache.Get(cacheKey); found {
 		if stops, ok := cached.([]models.Stop); ok {
+			c.metrics.IncrementCacheHits()
 			return stops, nil
 		}
 	}
+	c.metrics.IncrementCacheMisses()
 
 	endpoint := fmt.Sprintf("%s/api/where/stops-for-location.json", c.BaseURL)
 
 	var stopData models.StopData
+	startTime := time.Now()
 	err := c.circuitBreaker.Call(func() error {
 		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
@@ -910,9 +1078,17 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 
 		return nil
 	})
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
 		return nil, err
 	}
+
+	c.metrics.IncrementAPICall(responseTime)
 
 	// Validate API response structure
 	if stopData.Code != 200 {
