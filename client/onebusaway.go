@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -21,13 +22,84 @@ const (
 	// maxConcurrentRequests limits parallel API calls to prevent overwhelming the server
 	// Set to 10 to balance performance with server resource conservation
 	maxConcurrentRequests = 10
+
+	// cacheTTLMinutes defines how long to cache API responses
+	cacheTTLMinutes = 5
+
+	// maxCacheEntries limits the number of cached responses
+	maxCacheEntries = 1000
 )
+
+// CacheEntry represents a cached API response with expiration
+type CacheEntry struct {
+	Data      interface{}
+	ExpiresAt time.Time
+}
+
+// APICache provides thread-safe caching with TTL
+type APICache struct {
+	mutex   sync.RWMutex
+	entries map[string]CacheEntry
+}
+
+// NewAPICache creates a new cache instance
+func NewAPICache() *APICache {
+	return &APICache{
+		entries: make(map[string]CacheEntry),
+	}
+}
+
+// Get retrieves a cached entry if it exists and hasn't expired
+func (c *APICache) Get(key string) (interface{}, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	entry, exists := c.entries[key]
+	if !exists || time.Now().After(entry.ExpiresAt) {
+		return nil, false
+	}
+	return entry.Data, true
+}
+
+// Set stores a value in the cache with TTL
+func (c *APICache) Set(key string, value interface{}, ttl time.Duration) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Evict oldest entries if cache is full
+	if len(c.entries) >= maxCacheEntries {
+		c.evictOldest()
+	}
+
+	c.entries[key] = CacheEntry{
+		Data:      value,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+}
+
+// evictOldest removes the oldest entry from the cache
+func (c *APICache) evictOldest() {
+	var oldestKey string
+	var oldestTime time.Time
+
+	for key, entry := range c.entries {
+		if oldestKey == "" || entry.ExpiresAt.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = entry.ExpiresAt
+		}
+	}
+
+	if oldestKey != "" {
+		delete(c.entries, oldestKey)
+	}
+}
 
 type OneBusAwayClient struct {
 	BaseURL      string
 	APIKey       string
 	Client       *http.Client
 	coverageArea *models.CoverageArea
+	cache        *APICache
 }
 
 func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
@@ -37,6 +109,7 @@ func NewOneBusAwayClient(baseURL, apiKey string) *OneBusAwayClient {
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		cache: NewAPICache(),
 	}
 }
 
@@ -256,18 +329,33 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 		return nil, fmt.Errorf("stop ID cannot be empty")
 	}
 
+	// Check cache first
+	cacheKey := fmt.Sprintf("matching_stops:%s", stopID)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if stops, ok := cached.([]models.StopOption); ok {
+			return stops, nil
+		}
+	}
+
 	if strings.Contains(stopID, "_") {
 		stopOption, err := c.GetStopInfo(stopID)
 		if err != nil {
 			return nil, err
 		}
 		if stopOption != nil {
-			return []models.StopOption{*stopOption}, nil
+			result := []models.StopOption{*stopOption}
+			c.cache.Set(cacheKey, result, cacheTTLMinutes*time.Minute)
+			return result, nil
 		}
 		return []models.StopOption{}, nil
 	}
 
+	// Order agencies by likelihood (most common first based on typical transit systems)
 	agencies := []string{"1", "40", "29", "95", "97", "98", "3", "23"}
+
+	// Use context for proper timeout and cancellation
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(apiTimeoutSeconds)*time.Second)
+	defer cancel()
 
 	// Use a channel to collect results and limit concurrency
 	semaphore := make(chan struct{}, maxConcurrentRequests)
@@ -279,8 +367,20 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 		go func(agencyID string) {
 			defer wg.Done()
 
+			// Check if context is cancelled
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			// Acquire semaphore with panic recovery
-			semaphore <- struct{}{}
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+
 			defer func() {
 				if r := recover(); r != nil {
 					<-semaphore
@@ -290,28 +390,35 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 			}()
 
 			fullStopID := fmt.Sprintf("%s_%s", agencyID, stopID)
-			stopOption, err := c.GetStopInfo(fullStopID)
+			stopOption, err := c.GetStopInfoWithContext(ctx, fullStopID)
 			if err == nil && stopOption != nil {
-				resultChan <- stopOption
+				select {
+				case resultChan <- stopOption:
+				case <-ctx.Done():
+					return
+				}
 			} else {
-				resultChan <- nil
+				select {
+				case resultChan <- nil:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}(agency)
 	}
 
 	// Close result channel when all goroutines complete or timeout
 	go func() {
+		defer close(resultChan)
 		done := make(chan struct{})
 		go func() {
+			defer close(done)
 			wg.Wait()
-			close(done)
 		}()
 
 		select {
 		case <-done:
-			close(resultChan)
-		case <-time.After(apiTimeoutSeconds * time.Second):
-			close(resultChan)
+		case <-ctx.Done():
 		}
 	}()
 
@@ -323,13 +430,29 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 		}
 	}
 
+	// Cache the result
+	c.cache.Set(cacheKey, matchingStops, cacheTTLMinutes*time.Minute)
+
 	return matchingStops, nil
 }
 
 func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, error) {
+	return c.GetStopInfoWithContext(context.Background(), fullStopID)
+}
+
+// GetStopInfoWithContext fetches stop information with context for timeout and cancellation
+func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopID string) (*models.StopOption, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("stop_info:%s", fullStopID)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if stopOption, ok := cached.(*models.StopOption); ok {
+			return stopOption, nil
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s/api/where/stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
 
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -382,12 +505,17 @@ func (c *OneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, e
 
 	agencyName := c.getAgencyNameFromID(fullStopID, stopResp.Data.References.Agencies)
 
-	return &models.StopOption{
+	stopOption := &models.StopOption{
 		FullStopID:  fullStopID,
 		AgencyName:  agencyName,
 		StopName:    stopResp.Data.Entry.Name,
 		DisplayText: fmt.Sprintf("%s: %s", agencyName, stopResp.Data.Entry.Name),
-	}, nil
+	}
+
+	// Cache the result
+	c.cache.Set(cacheKey, stopOption, cacheTTLMinutes*time.Minute)
+
+	return stopOption, nil
 }
 
 func (c *OneBusAwayClient) getAgencyNameFromID(stopID string, agencies []struct {
