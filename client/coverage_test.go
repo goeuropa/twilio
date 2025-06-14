@@ -617,7 +617,7 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	// Create a server that delays responses beyond the timeout
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Sleep longer than the HTTP client timeout to trigger timeout mechanism
-		time.Sleep(15 * time.Second) // HTTP client timeout is 10s, context timeout is 1s
+		time.Sleep(200 * time.Millisecond) // Sleep slightly longer than HTTP client timeout
 
 		mockStopResp := struct {
 			Data struct {
@@ -687,7 +687,7 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	assert.NoError(t, err)
 	
 	// Override HTTP client timeout to be shorter for testing
-	client.Client.Timeout = 500 * time.Millisecond
+	client.Client.Timeout = 100 * time.Millisecond
 
 	// This test should complete quickly due to timeout mechanism
 	// even though the server would take 15s to respond
@@ -695,8 +695,8 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	stops, err := client.FindAllMatchingStops("12345")
 	duration := time.Since(start)
 
-	// Should complete within reasonable time due to timeout (500ms HTTP timeout + some buffer)
-	assert.Less(t, duration, 1*time.Second, "FindAllMatchingStops should timeout after ~500ms")
+	// Should complete within reasonable time due to timeout (100ms HTTP timeout + some buffer)
+	assert.Less(t, duration, 500*time.Millisecond, "FindAllMatchingStops should timeout after ~100ms")
 
 	// Should return empty results due to timeout
 	assert.NoError(t, err)
