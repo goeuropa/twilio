@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -23,17 +24,38 @@ type MockOneBusAwayClient struct {
 
 func (m *MockOneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneBusAwayResponse, error) {
 	args := m.Called(stopID)
-	return args.Get(0).(*models.OneBusAwayResponse), args.Error(1)
+	resp := args.Get(0)
+	if resp == nil {
+		return nil, args.Error(1)
+	}
+	if response, ok := resp.(*models.OneBusAwayResponse); ok {
+		return response, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDepartures")
 }
 
 func (m *MockOneBusAwayClient) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
 	args := m.Called(resp)
-	return args.Get(0).([]models.Arrival)
+	result := args.Get(0)
+	if result == nil {
+		return nil
+	}
+	if arrivals, ok := result.([]models.Arrival); ok {
+		return arrivals
+	}
+	return nil
 }
 
 func (m *MockOneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 	args := m.Called(query)
-	return args.Get(0).([]models.Stop), args.Error(1)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	if stops, ok := result.([]models.Stop); ok {
+		return stops, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for SearchStops")
 }
 
 func (m *MockOneBusAwayClient) InitializeCoverage() error {
@@ -43,23 +65,38 @@ func (m *MockOneBusAwayClient) InitializeCoverage() error {
 
 func (m *MockOneBusAwayClient) GetCoverageArea() *models.CoverageArea {
 	args := m.Called()
-	if args.Get(0) == nil {
+	result := args.Get(0)
+	if result == nil {
 		return nil
 	}
-	return args.Get(0).(*models.CoverageArea)
+	if coverage, ok := result.(*models.CoverageArea); ok {
+		return coverage
+	}
+	return nil
 }
 
 func (m *MockOneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
 	args := m.Called(stopID)
-	return args.Get(0).([]models.StopOption), args.Error(1)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	if stops, ok := result.([]models.StopOption); ok {
+		return stops, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for FindAllMatchingStops")
 }
 
 func (m *MockOneBusAwayClient) GetStopInfo(fullStopID string) (*models.StopOption, error) {
 	args := m.Called(fullStopID)
-	if args.Get(0) == nil {
+	result := args.Get(0)
+	if result == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*models.StopOption), args.Error(1)
+	if stopOption, ok := result.(*models.StopOption); ok {
+		return stopOption, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetStopInfo")
 }
 
 func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
