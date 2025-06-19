@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "Bienvenido a la información de tránsito de OneBusAway. Por favor ingrese su ID de parada seguido de la tecla numeral.",
+  "voice.error.invalid_request": "Formato de solicitud inválido.",
+  "voice.error.no_stops_found": "Lo siento, no pude encontrar ninguna parada con ese ID. Por favor verifique el ID de la parada e inténtelo de nuevo.",
+  "voice.error.template_failed": "Error al generar respuesta.",
+  "voice.error.service_unavailable": "El servicio OneBusAway no está disponible temporalmente. Por favor inténtelo de nuevo en un momento.",
+  "voice.menu.more_departures": "Para escuchar más salidas, presione 1.",
+  "voice.menu.main_menu": "Para regresar al menú principal, presione 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "Para elegir otro idioma, presione asterisco.",
+  "voice.language.confirm_selection": "Ha seleccionado Español. Presione 1 para confirmar, o 2 para elegir un idioma diferente.",
+  "voice.language.selection_menu": "Presione 1 for English, presione 2 para Español.",
+  "voice.disambiguation.prompt": "Encontré %d paradas con ID %s.",
+  "voice.disambiguation.option": "Presione %d para %s.",
+  "voice.time.now": "Ahora",
+  "voice.time.minutes": "%d min",
+  "voice.time.minute": "1 min",
+  "sms.no_stops_found": "Lo siento, no se encontraron paradas con ID %s. Por favor verifique e inténtelo de nuevo.",
+  "sms.no_arrivals": "No se encontraron próximas llegadas para esta parada.",
+  "sms.service_unavailable": "El servicio OneBusAway no está disponible temporalmente. Por favor inténtelo de nuevo."
+}

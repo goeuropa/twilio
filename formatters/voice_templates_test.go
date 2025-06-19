@@ -47,6 +47,7 @@ func TestRenderVoiceFindStop(t *testing.T) {
 	ctx := VoiceFindStopContext{
 		ArrivalsMessage: "Route 8 to Seattle Center in 3 minutes.",
 		MinutesAfter:    0,
+		MenuPrompt:      "To hear more departures, press 1. To go back to the main menu, press 2.",
 	}
 
 	result, err := manager.RenderVoiceFindStop(ctx)
@@ -75,6 +76,7 @@ func TestRenderVoiceFindStopWithMinutesAfter(t *testing.T) {
 	ctx := VoiceFindStopContext{
 		ArrivalsMessage: "Route 8 to Seattle Center in 3 minutes.",
 		MinutesAfter:    30,
+		MenuPrompt:      "To hear more departures, press 1. To go back to the main menu, press 2.",
 	}
 
 	result, err := manager.RenderVoiceFindStop(ctx)
@@ -169,6 +171,7 @@ func TestRenderVoiceFindStopEmpty(t *testing.T) {
 
 	ctx := VoiceFindStopContext{
 		ArrivalsMessage: "",
+		MenuPrompt:      "To hear more departures, press 1. To go back to the main menu, press 2.",
 	}
 
 	result, err := manager.RenderVoiceFindStop(ctx)
@@ -220,6 +223,7 @@ func TestAllTemplatesProduceValidXML(t *testing.T) {
 			func() (string, error) {
 				return manager.RenderVoiceFindStop(VoiceFindStopContext{
 					ArrivalsMessage: "Test arrivals",
+					MenuPrompt:      "Test menu prompt",
 				})
 			},
 		},

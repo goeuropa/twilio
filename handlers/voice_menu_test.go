@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
@@ -114,7 +115,8 @@ func setupVoiceMenuTestRouter() (*gin.Engine, *MockOneBusAwayClientVoiceMenu, *V
 	gin.SetMode(gin.TestMode)
 
 	mockClient := &MockOneBusAwayClientVoiceMenu{}
-	voiceHandler := NewVoiceHandler(mockClient)
+	locManager := localization.NewTestManager()
+	voiceHandler := NewVoiceHandler(mockClient, locManager)
 
 	r := gin.New()
 	r.POST("/voice", voiceHandler.HandleVoiceStart)
@@ -198,7 +200,8 @@ func TestVoiceHandler_FindStopWithMenuOptions(t *testing.T) {
 	assert.Contains(t, body, "press 1")
 	assert.Contains(t, body, "To go back to the main menu")
 	assert.Contains(t, body, "press 2")
-	assert.Contains(t, body, "action=\"/voice/menu_action?minutesAfter=60\"")
+	assert.Contains(t, body, "/voice/menu_action?minutesAfter=60")
+	assert.Contains(t, body, "lang=en-US")
 
 	mockClient.AssertExpectations(t)
 }
@@ -493,7 +496,8 @@ func TestSessionStore_VoiceSessionTimeout(t *testing.T) {
 
 func TestVoiceHandler_MenuActionWithQueryParameter(t *testing.T) {
 	mockClient := &MockOneBusAwayClientVoiceMenu{}
-	voiceHandler := NewVoiceHandler(mockClient)
+	locManager := localization.NewTestManager()
+	voiceHandler := NewVoiceHandler(mockClient, locManager)
 	defer voiceHandler.Close()
 
 	// Set up initial session
@@ -544,7 +548,8 @@ func TestVoiceHandler_MenuActionWithQueryParameter(t *testing.T) {
 
 func TestVoiceHandler_MenuActionMissingQueryParameter(t *testing.T) {
 	mockClient := &MockOneBusAwayClientVoiceMenu{}
-	voiceHandler := NewVoiceHandler(mockClient)
+	locManager := localization.NewTestManager()
+	voiceHandler := NewVoiceHandler(mockClient, locManager)
 	defer voiceHandler.Close()
 
 	// Set up initial session

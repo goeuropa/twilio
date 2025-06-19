@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "مرحبا بكم في معلومات النقل العام OneBusAway. يرجى إدخال رقم محطتك متبوعا بمفتاح الشباك.",
+  "voice.error.invalid_request": "تنسيق الطلب غير صحيح.",
+  "voice.error.no_stops_found": "عذرا، لم أتمكن من العثور على أي محطات بهذا الرقم. يرجى التحقق من رقم المحطة والمحاولة مرة أخرى.",
+  "voice.error.template_failed": "خطأ في إنشاء الاستجابة.",
+  "voice.error.service_unavailable": "خدمة OneBusAway غير متاحة مؤقتا. يرجى المحاولة مرة أخرى بعد لحظة.",
+  "voice.menu.more_departures": "لسماع المزيد من المغادرات، اضغط 1.",
+  "voice.menu.main_menu": "للعودة إلى القائمة الرئيسية، اضغط 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "لاختيار لغة أخرى، اضغط النجمة.",
+  "voice.language.confirm_selection": "لقد اخترت العربية. اضغط 1 للتأكيد، أو 2 لاختيار لغة مختلفة.",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, اضغط 3 للعربية.",
+  "voice.disambiguation.prompt": "وجدت %d محطات برقم %s.",
+  "voice.disambiguation.option": "اضغط %d لـ %s.",
+  "voice.time.now": "الآن",
+  "voice.time.minutes": "%d دقيقة",
+  "voice.time.minute": "دقيقة واحدة",
+  "sms.no_stops_found": "عذرا، لم يتم العثور على محطات برقم %s. يرجى التحقق والمحاولة مرة أخرى.",
+  "sms.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
+  "sms.service_unavailable": "خدمة OneBusAway غير متاحة مؤقتا. يرجى المحاولة مرة أخرى."
+}

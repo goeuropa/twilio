@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "OneBusAway 대중교통 정보 서비스에 오신 것을 환영합니다. 정류장 ID를 입력한 후 우물정자 키를 눌러 주세요.",
+  "voice.error.invalid_request": "잘못된 요청 형식입니다.",
+  "voice.error.no_stops_found": "죄송합니다. 해당 ID로 정류장을 찾을 수 없습니다. 정류장 ID를 확인하고 다시 시도해 주세요.",
+  "voice.error.template_failed": "응답 생성 중 오류가 발생했습니다.",
+  "voice.error.service_unavailable": "OneBusAway 서비스가 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  "voice.menu.more_departures": "더 많은 출발 정보를 들으려면 1번을 누르세요.",
+  "voice.menu.main_menu": "메인 메뉴로 돌아가려면 2번을 누르세요.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "다른 언어를 선택하려면 별표를 누르세요.",
+  "voice.language.confirm_selection": "한국어를 선택하셨습니다. 확인하려면 1번, 다른 언어를 선택하려면 2번을 누르세요.",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, 한국어는 3번을 누르세요.",
+  "voice.disambiguation.prompt": "ID %s로 %d개의 정류장을 찾았습니다.",
+  "voice.disambiguation.option": "%s를 선택하려면 %d번을 누르세요.",
+  "voice.time.now": "지금",
+  "voice.time.minutes": "%d분",
+  "voice.time.minute": "1분",
+  "sms.no_stops_found": "죄송합니다. ID %s로 정류장을 찾을 수 없습니다. 확인 후 다시 시도해 주세요.",
+  "sms.no_arrivals": "이 정류장에 예정된 도착 정보가 없습니다.",
+  "sms.service_unavailable": "OneBusAway 서비스가 일시적으로 사용할 수 없습니다. 다시 시도해 주세요."
+}

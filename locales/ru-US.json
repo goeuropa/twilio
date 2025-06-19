@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "Добро пожаловать в информационную службу общественного транспорта OneBusAway. Пожалуйста, введите ID вашей остановки, а затем нажмите клавишу решетки.",
+  "voice.error.invalid_request": "Неверный формат запроса.",
+  "voice.error.no_stops_found": "Извините, я не смог найти остановки с этим ID. Пожалуйста, проверьте ID остановки и попробуйте снова.",
+  "voice.error.template_failed": "Ошибка при создании ответа.",
+  "voice.error.service_unavailable": "Сервис OneBusAway временно недоступен. Пожалуйста, попробуйте снова через некоторое время.",
+  "voice.menu.more_departures": "Чтобы услышать больше отправлений, нажмите 1.",
+  "voice.menu.main_menu": "Чтобы вернуться в главное меню, нажмите 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "Чтобы выбрать другой язык, нажмите звездочку.",
+  "voice.language.confirm_selection": "Вы выбрали русский язык. Нажмите 1 для подтверждения или 2 для выбора другого языка.",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, нажмите 3 для русского.",
+  "voice.disambiguation.prompt": "Я нашел %d остановок с ID %s.",
+  "voice.disambiguation.option": "Нажмите %d для %s.",
+  "voice.time.now": "Сейчас",
+  "voice.time.minutes": "%d мин",
+  "voice.time.minute": "1 мин",
+  "sms.no_stops_found": "Извините, остановки с ID %s не найдены. Пожалуйста, проверьте и попробуйте снова.",
+  "sms.no_arrivals": "Ближайших прибытий для этой остановки не найдено.",
+  "sms.service_unavailable": "Сервис OneBusAway временно недоступен. Пожалуйста, попробуйте снова."
+}

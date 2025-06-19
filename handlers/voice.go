@@ -11,25 +11,28 @@ import (
 
 	"oba-twilio/client"
 	"oba-twilio/formatters"
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
 type VoiceHandler struct {
-	OBAClient       client.OneBusAwayClientInterface
-	SessionStore    *SessionStore
-	TemplateManager *formatters.VoiceTemplateManager
+	OBAClient           client.OneBusAwayClientInterface
+	SessionStore        *SessionStore
+	TemplateManager     *formatters.VoiceTemplateManager
+	LocalizationManager *localization.LocalizationManager
 }
 
-func NewVoiceHandler(obaClient client.OneBusAwayClientInterface) *VoiceHandler {
+func NewVoiceHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *VoiceHandler {
 	templateManager, err := formatters.NewVoiceTemplateManager()
 	if err != nil {
 		log.Fatalf("Failed to initialize voice template manager: %v", err)
 	}
 
 	return &VoiceHandler{
-		OBAClient:       obaClient,
-		SessionStore:    NewSessionStore(),
-		TemplateManager: templateManager,
+		OBAClient:           obaClient,
+		SessionStore:        NewSessionStore(),
+		TemplateManager:     templateManager,
+		LocalizationManager: locManager,
 	}
 }
 
@@ -44,8 +47,10 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("Failed to bind voice request: %v", err)
 		c.Header("Content-Type", "text/xml")
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_request", language)
 		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid request format.",
+			ErrorMessage: errorMsg,
 		})
 		c.String(http.StatusBadRequest, twiml)
 		return
@@ -53,20 +58,24 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 
 	log.Printf("Received voice call from %s", req.From)
 
-	prompt := "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key."
+	language := h.getLanguageFromRequest(c)
+
+	// Handle language selection based on supported languages count
+	languageCount := h.LocalizationManager.GetLanguageCount()
 
 	c.Header("Content-Type", "text/xml")
-	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
-		WelcomePrompt: prompt,
-	})
-	if err != nil {
-		log.Printf("Failed to generate TwiML: %v", err)
-		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Error generating response.",
-		})
-	}
 
-	c.String(http.StatusOK, twiml)
+	switch languageCount {
+	case 1:
+		// Single language - proceed directly
+		h.renderMainMenuWithLanguage(c, language)
+	case 2:
+		// Two languages - show main menu with Spanish option
+		h.renderMainMenuWithSpanishOption(c, language)
+	default:
+		// Multiple languages - show main menu with language selection option
+		h.renderMainMenuWithLanguageSelection(c, language)
+	}
 }
 
 func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
@@ -360,8 +369,10 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 
 	if err != nil {
 		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.service_unavailable", language)
 		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Sorry, I couldn't get arrival information for that stop. Please try again.",
+			ErrorMessage: errorMsg,
 		})
 		c.String(http.StatusOK, twiml)
 		return
@@ -381,14 +392,92 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 		log.Printf("Failed to set voice session for %s: %v", phoneNumber, err)
 	}
 
+	language := h.getLanguageFromRequest(c)
+	menuPrompt := h.LocalizationManager.GetString("voice.menu.more_departures", language) + " " + h.LocalizationManager.GetString("voice.menu.main_menu", language)
+
 	twiml, err := h.TemplateManager.RenderVoiceFindStop(formatters.VoiceFindStopContext{
 		ArrivalsMessage: message,
 		MinutesAfter:    minutesAfter,
+		MenuPrompt:      menuPrompt,
+		Language:        language,
 	})
 	if err != nil {
 		log.Printf("Failed to generate TwiML: %v", err)
+		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
 		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Error generating response.",
+			ErrorMessage: errorMsg,
+		})
+	}
+
+	c.String(http.StatusOK, twiml)
+}
+
+// getLanguageFromRequest extracts language from URL parameter or defaults to primary language
+func (h *VoiceHandler) getLanguageFromRequest(c *gin.Context) string {
+	language := c.Query("lang")
+	if language != "" && h.LocalizationManager.IsSupported(language) {
+		return language
+	}
+	return h.LocalizationManager.GetPrimaryLanguage()
+}
+
+// renderMainMenuWithLanguage renders the main menu for single language setup
+func (h *VoiceHandler) renderMainMenuWithLanguage(c *gin.Context, language string) {
+	prompt := h.LocalizationManager.GetString("voice.welcome", language)
+
+	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
+		WelcomePrompt: prompt,
+		Language:      language,
+	})
+	if err != nil {
+		log.Printf("Failed to generate TwiML: %v", err)
+		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: errorMsg,
+		})
+	}
+
+	c.String(http.StatusOK, twiml)
+}
+
+// renderMainMenuWithSpanishOption renders the main menu with Spanish language option
+func (h *VoiceHandler) renderMainMenuWithSpanishOption(c *gin.Context, language string) {
+	prompt := h.LocalizationManager.GetString("voice.welcome", language)
+	spanishOption := h.LocalizationManager.GetString("voice.language.spanish_option", language)
+
+	fullPrompt := prompt + " " + spanishOption
+
+	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
+		WelcomePrompt: fullPrompt,
+		Language:      language,
+	})
+	if err != nil {
+		log.Printf("Failed to generate TwiML: %v", err)
+		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: errorMsg,
+		})
+	}
+
+	c.String(http.StatusOK, twiml)
+}
+
+// renderMainMenuWithLanguageSelection renders the main menu with language selection option
+func (h *VoiceHandler) renderMainMenuWithLanguageSelection(c *gin.Context, language string) {
+	prompt := h.LocalizationManager.GetString("voice.welcome", language)
+	languageOption := h.LocalizationManager.GetString("voice.language.choose_language", language)
+
+	fullPrompt := prompt + " " + languageOption
+
+	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
+		WelcomePrompt: fullPrompt,
+		Language:      language,
+	})
+	if err != nil {
+		log.Printf("Failed to generate TwiML: %v", err)
+		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: errorMsg,
 		})
 	}
 

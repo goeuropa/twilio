@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "Witamy w informacjach o transporcie OneBusAway. Proszę wprowadzić ID przystanku, a następnie nacisnąć klawisz kratki.",
+  "voice.error.invalid_request": "Nieprawidłowy format żądania.",
+  "voice.error.no_stops_found": "Przepraszam, nie mogłem znaleźć żadnych przystanków z tym ID. Proszę sprawdzić ID przystanku i spróbować ponownie.",
+  "voice.error.template_failed": "Błąd podczas generowania odpowiedzi.",
+  "voice.error.service_unavailable": "Usługa OneBusAway jest tymczasowo niedostępna. Proszę spróbować ponownie za chwilę.",
+  "voice.menu.more_departures": "Aby usłyszeć więcej odjazdów, naciśnij 1.",
+  "voice.menu.main_menu": "Aby wrócić do menu głównego, naciśnij 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "Aby wybrać inny język, naciśnij gwiazdkę.",
+  "voice.language.confirm_selection": "Wybrałeś polski. Naciśnij 1, aby potwierdzić, lub 2, aby wybrać inny język.",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, naciśnij 3 dla polskiego.",
+  "voice.disambiguation.prompt": "Znalazłem %d przystanków z ID %s.",
+  "voice.disambiguation.option": "Naciśnij %d dla %s.",
+  "voice.time.now": "Teraz",
+  "voice.time.minutes": "%d min",
+  "voice.time.minute": "1 min",
+  "sms.no_stops_found": "Przepraszam, nie znaleziono przystanków z ID %s. Proszę sprawdzić i spróbować ponownie.",
+  "sms.no_arrivals": "Nie znaleziono nadchodzących przyjazdów dla tego przystanku.",
+  "sms.service_unavailable": "Usługa OneBusAway jest tymczasowo niedostępna. Proszę spróbować ponownie."
+}

@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key.",
+  "voice.error.invalid_request": "Invalid request format.",
+  "voice.error.no_stops_found": "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
+  "voice.error.template_failed": "Error generating response.",
+  "voice.error.service_unavailable": "OneBusAway service is temporarily unavailable. Please try again in a moment.",
+  "voice.menu.more_departures": "To hear more departures, press 1.",
+  "voice.menu.main_menu": "To go back to the main menu, press 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "To choose another language, press asterisk.",
+  "voice.language.confirm_selection": "You have selected English. Press 1 to confirm, or 2 to choose a different language.",
+  "voice.language.selection_menu": "Press 1 for English, press 2 para Español.",
+  "voice.disambiguation.prompt": "I found %d stops with ID %s.",
+  "voice.disambiguation.option": "Press %d for %s.",
+  "voice.time.now": "Now",
+  "voice.time.minutes": "%d min",
+  "voice.time.minute": "1 min",
+  "sms.no_stops_found": "Sorry, no stops found with ID %s. Please check and try again.",
+  "sms.no_arrivals": "No upcoming arrivals found for this stop.",
+  "sms.service_unavailable": "OneBusAway service is temporarily unavailable. Please try again."
+}

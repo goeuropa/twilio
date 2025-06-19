@@ -9,6 +9,7 @@ import (
 
 	"oba-twilio/client"
 	"oba-twilio/handlers"
+	"oba-twilio/localization"
 )
 
 func main() {
@@ -34,6 +35,18 @@ func main() {
 		obaBaseURL = "https://api.pugetsound.onebusaway.org"
 	}
 
+	supportedLanguages := os.Getenv("SUPPORTED_LANGUAGES")
+	if supportedLanguages == "" {
+		supportedLanguages = "en-US"
+	}
+
+	locManager, err := localization.NewManager(supportedLanguages)
+	if err != nil {
+		log.Fatal("Failed to initialize localization manager:", err)
+	}
+
+	log.Printf("Localization initialized with languages: %s", supportedLanguages)
+
 	obaClient := client.NewOneBusAwayClient(obaBaseURL, obaAPIKey)
 
 	log.Printf("Initializing coverage area for OneBusAway server...")
@@ -46,8 +59,8 @@ func main() {
 			coverage.CenterLat, coverage.CenterLon, coverage.Radius)
 	}
 
-	smsHandler := handlers.NewSMSHandler(obaClient)
-	voiceHandler := handlers.NewVoiceHandler(obaClient)
+	smsHandler := handlers.NewSMSHandler(obaClient, locManager)
+	voiceHandler := handlers.NewVoiceHandler(obaClient, locManager)
 
 	r := gin.Default()
 

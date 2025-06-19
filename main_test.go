@@ -15,6 +15,7 @@ import (
 
 	"oba-twilio/client"
 	"oba-twilio/handlers"
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
@@ -115,8 +116,9 @@ func setupTestRouter() (*gin.Engine, *MockOneBusAwayClient) {
 	gin.SetMode(gin.TestMode)
 
 	mockClient := &MockOneBusAwayClient{}
-	smsHandler := handlers.NewSMSHandler(mockClient)
-	voiceHandler := handlers.NewVoiceHandler(mockClient)
+	locManager := localization.NewTestManager()
+	smsHandler := handlers.NewSMSHandler(mockClient, locManager)
+	voiceHandler := handlers.NewVoiceHandler(mockClient, locManager)
 
 	r := gin.New()
 	r.POST("/sms", smsHandler.HandleSMS)

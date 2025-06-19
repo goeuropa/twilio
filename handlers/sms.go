@@ -10,18 +10,21 @@ import (
 
 	"oba-twilio/client"
 	"oba-twilio/formatters"
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
 type SMSHandler struct {
-	OBAClient    client.OneBusAwayClientInterface
-	SessionStore *SessionStore
+	OBAClient           client.OneBusAwayClientInterface
+	SessionStore        *SessionStore
+	LocalizationManager *localization.LocalizationManager
 }
 
-func NewSMSHandler(obaClient client.OneBusAwayClientInterface) *SMSHandler {
+func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *SMSHandler {
 	return &SMSHandler{
-		OBAClient:    obaClient,
-		SessionStore: NewSessionStore(),
+		OBAClient:           obaClient,
+		SessionStore:        NewSessionStore(),
+		LocalizationManager: locManager,
 	}
 }
 
@@ -54,7 +57,8 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	// Clear any existing disambiguation session for new queries
 	h.SessionStore.ClearDisambiguationSession(req.From)
 
-	stopID := formatters.ExtractStopID(req.Body)
+	// Extract language and stop ID from message
+	language, stopID := h.extractLanguageFromMessage(req.Body)
 	if stopID == "" {
 		twiml, _ := formatters.GenerateTwiMLSMS("Please send a valid stop ID (e.g., 75403).")
 		c.String(http.StatusOK, twiml)
@@ -79,7 +83,8 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	}
 
 	if len(matchingStops) == 0 {
-		twiml, _ := formatters.GenerateTwiMLSMS("Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.")
+		errorMsg := h.LocalizationManager.GetString("sms.no_stops_found", language, stopID)
+		twiml, _ := formatters.GenerateTwiMLSMS(errorMsg)
 		c.String(http.StatusOK, twiml)
 		return
 	}
@@ -150,4 +155,15 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopName(c *gin.Context, fullStopID
 	}
 
 	c.String(http.StatusOK, twiml)
+}
+
+// extractLanguageFromMessage extracts language prefix and stop ID from SMS message
+func (h *SMSHandler) extractLanguageFromMessage(message string) (string, string) {
+	parts := strings.SplitN(strings.TrimSpace(message), " ", 2)
+	if len(parts) == 2 {
+		if h.LocalizationManager.IsSupported(parts[0]) {
+			return parts[0], formatters.ExtractStopID(parts[1])
+		}
+	}
+	return h.LocalizationManager.GetPrimaryLanguage(), formatters.ExtractStopID(message)
 }

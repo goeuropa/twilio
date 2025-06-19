@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "Bienvenue aux informations de transport OneBusAway. Veuillez entrer votre ID d'arrêt suivi de la touche dièse.",
+  "voice.error.invalid_request": "Format de demande invalide.",
+  "voice.error.no_stops_found": "Désolé, je n'ai trouvé aucun arrêt avec cet ID. Veuillez vérifier l'ID de l'arrêt et réessayer.",
+  "voice.error.template_failed": "Erreur lors de la génération de la réponse.",
+  "voice.error.service_unavailable": "Le service OneBusAway est temporairement indisponible. Veuillez réessayer dans un moment.",
+  "voice.menu.more_departures": "Pour entendre plus de départs, appuyez sur 1.",
+  "voice.menu.main_menu": "Pour retourner au menu principal, appuyez sur 2.",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "Pour choisir une autre langue, appuyez sur astérisque.",
+  "voice.language.confirm_selection": "Vous avez sélectionné le français. Appuyez sur 1 pour confirmer, ou sur 2 pour choisir une autre langue.",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, appuyez sur 3 pour le français.",
+  "voice.disambiguation.prompt": "J'ai trouvé %d arrêts avec l'ID %s.",
+  "voice.disambiguation.option": "Appuyez sur %d pour %s.",
+  "voice.time.now": "Maintenant",
+  "voice.time.minutes": "%d min",
+  "voice.time.minute": "1 min",
+  "sms.no_stops_found": "Désolé, aucun arrêt trouvé avec l'ID %s. Veuillez vérifier et réessayer.",
+  "sms.no_arrivals": "Aucune arrivée prochaine trouvée pour cet arrêt.",
+  "sms.service_unavailable": "Le service OneBusAway est temporairement indisponible. Veuillez réessayer."
+}

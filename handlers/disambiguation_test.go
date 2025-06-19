@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"oba-twilio/localization"
+
 	"oba-twilio/models"
 )
 
@@ -113,7 +115,8 @@ func setupDisambiguationTestRouter() (*gin.Engine, *MockOneBusAwayClientDisambig
 	gin.SetMode(gin.TestMode)
 
 	mockClient := &MockOneBusAwayClientDisambiguation{}
-	smsHandler := NewSMSHandler(mockClient)
+	locManager := localization.NewTestManager()
+	smsHandler := NewSMSHandler(mockClient, locManager)
 
 	r := gin.New()
 	r.POST("/sms", smsHandler.HandleSMS)

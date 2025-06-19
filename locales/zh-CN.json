@@ -1,0 +1,21 @@
+{
+  "voice.welcome": "欢迎使用OneBusAway公交信息服务。请输入您的站点ID，然后按井号键。",
+  "voice.error.invalid_request": "请求格式无效。",
+  "voice.error.no_stops_found": "抱歉，找不到该ID的站点。请检查站点ID后重试。",
+  "voice.error.template_failed": "生成响应时出错。",
+  "voice.error.service_unavailable": "OneBusAway服务暂时不可用。请稍后重试。",
+  "voice.menu.more_departures": "要听取更多班次信息，请按1。",
+  "voice.menu.main_menu": "要返回主菜单，请按2。",
+  "voice.language.spanish_option": "Para continuar en Español, presione asterisco.",
+  "voice.language.choose_language": "要选择其他语言，请按星号键。",
+  "voice.language.confirm_selection": "您已选择中文。按1确认，或按2选择其他语言。",
+  "voice.language.selection_menu": "Press 1 for English, presione 2 para Español, 按3选择中文。",
+  "voice.disambiguation.prompt": "我找到了%d个ID为%s的站点。",
+  "voice.disambiguation.option": "按%d选择%s。",
+  "voice.time.now": "现在",
+  "voice.time.minutes": "%d分钟",
+  "voice.time.minute": "1分钟",
+  "sms.no_stops_found": "抱歉，找不到ID为%s的站点。请检查后重试。",
+  "sms.no_arrivals": "该站点没有即将到达的班次。",
+  "sms.service_unavailable": "OneBusAway服务暂时不可用。请重试。"
+}

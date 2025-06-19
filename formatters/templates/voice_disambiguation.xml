@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Gather numDigits="1" action="/voice/find_stop" method="POST">
+    <Gather numDigits="1" action="/voice/find_stop{{if .Language}}?lang={{.Language}}{{end}}" method="POST">
         <Say>{{.DisambiguationPrompt}}</Say>
     </Gather>
 </Response>

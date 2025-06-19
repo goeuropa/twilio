@@ -27,11 +27,14 @@ type VoiceTemplateManager struct {
 
 type VoiceStartContext struct {
 	WelcomePrompt string
+	Language      string `json:"language,omitempty"`
 }
 
 type VoiceFindStopContext struct {
 	ArrivalsMessage string
 	MinutesAfter    int
+	MenuPrompt      string
+	Language        string `json:"language,omitempty"`
 }
 
 type VoiceErrorContext struct {
@@ -40,6 +43,7 @@ type VoiceErrorContext struct {
 
 type VoiceDisambiguationContext struct {
 	DisambiguationPrompt string
+	Language             string `json:"language,omitempty"`
 }
 
 func NewVoiceTemplateManager() (*VoiceTemplateManager, error) {
