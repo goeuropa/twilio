@@ -32,6 +32,18 @@ func (m *MockOneBusAwayClientDisambiguation) GetArrivalsAndDepartures(stopID str
 	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDepartures")
 }
 
+func (m *MockOneBusAwayClientDisambiguation) GetArrivalsAndDeparturesWithWindow(stopID string, minutesAfter int) (*models.OneBusAwayResponse, error) {
+	args := m.Called(stopID, minutesAfter)
+	resp := args.Get(0)
+	if resp == nil {
+		return nil, args.Error(1)
+	}
+	if response, ok := resp.(*models.OneBusAwayResponse); ok {
+		return response, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
+}
+
 func (m *MockOneBusAwayClientDisambiguation) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
 	args := m.Called(resp)
 	result := args.Get(0)
@@ -395,7 +407,10 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 	// Writers
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			store.SetDisambiguationSession(phoneNumber, session) // Ignore error in test goroutine
+			if err := store.SetDisambiguationSession(phoneNumber, session); err != nil {
+				// Error is expected in concurrent test scenario
+				t.Logf("Expected error in concurrent write: %v", err)
+			}
 			done <- true
 		}()
 	}

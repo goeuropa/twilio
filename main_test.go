@@ -34,6 +34,18 @@ func (m *MockOneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.
 	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDepartures")
 }
 
+func (m *MockOneBusAwayClient) GetArrivalsAndDeparturesWithWindow(stopID string, minutesAfter int) (*models.OneBusAwayResponse, error) {
+	args := m.Called(stopID, minutesAfter)
+	resp := args.Get(0)
+	if resp == nil {
+		return nil, args.Error(1)
+	}
+	if response, ok := resp.(*models.OneBusAwayResponse); ok {
+		return response, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
+}
+
 func (m *MockOneBusAwayClient) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
 	args := m.Called(resp)
 	result := args.Get(0)
@@ -286,7 +298,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 	}
 
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
-	mockClient.On("GetArrivalsAndDepartures", "1_12345").Return(mockResponse, nil)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
 
 	form := url.Values{}

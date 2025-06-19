@@ -140,7 +140,7 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopName(c *gin.Context, fullStopID
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
-	
+
 	message := formatters.FormatSMSResponse(arrivals, stopDisplayName)
 
 	twiml, err := formatters.GenerateTwiMLSMS(message)

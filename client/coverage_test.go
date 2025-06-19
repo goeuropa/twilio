@@ -58,7 +58,9 @@ func TestInitializeCoverage_Success(t *testing.T) {
 		assert.Equal(t, "test-key", r.URL.Query().Get("key"))
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		if err := json.NewEncoder(w).Encode(mockResponse); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -115,7 +117,9 @@ func TestInitializeCoverage_SingleAgency(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		if err := json.NewEncoder(w).Encode(mockResponse); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -158,7 +162,9 @@ func TestInitializeCoverage_NoAgencies(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		if err := json.NewEncoder(w).Encode(mockResponse); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -257,7 +263,8 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/where/agencies-with-coverage.json" {
+		switch r.URL.Path {
+		case "/api/where/agencies-with-coverage.json":
 			mockCoverage := models.AgenciesWithCoverageResponse{
 				Data: struct {
 					LimitExceeded bool `json:"limitExceeded"`
@@ -289,15 +296,19 @@ func TestSearchStops_WithCoverage(t *testing.T) {
 				Text: "OK",
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockCoverage)
-		} else if r.URL.Path == "/api/where/stops-for-location.json" {
+			if err := json.NewEncoder(w).Encode(mockCoverage); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		case "/api/where/stops-for-location.json":
 			assert.Equal(t, "test search", r.URL.Query().Get("query"))
 			assert.NotEmpty(t, r.URL.Query().Get("lat"))
 			assert.NotEmpty(t, r.URL.Query().Get("lon"))
 			assert.NotEmpty(t, r.URL.Query().Get("radius"))
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockStopData)
+			if err := json.NewEncoder(w).Encode(mockStopData); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -397,7 +408,9 @@ func TestFindAllMatchingStops_SingleMatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockStopResp)
+			if err := json.NewEncoder(w).Encode(mockStopResp); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -524,10 +537,14 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockStopResp1)
+			if err := json.NewEncoder(w).Encode(mockStopResp1); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		} else if strings.Contains(r.URL.Path, "/api/where/stop/40_12345.json") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockStopResp2)
+			if err := json.NewEncoder(w).Encode(mockStopResp2); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -545,11 +562,12 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 	foundSoundTransit := false
 
 	for _, stop := range stops {
-		if stop.FullStopID == "1_12345" {
+		switch stop.FullStopID {
+		case "1_12345":
 			assert.Equal(t, "King County Metro", stop.AgencyName)
 			assert.Equal(t, "Pine St & 3rd Ave", stop.StopName)
 			foundMetro = true
-		} else if stop.FullStopID == "40_12345" {
+		case "40_12345":
 			assert.Equal(t, "Sound Transit", stop.AgencyName)
 			assert.Equal(t, "University Street Station", stop.StopName)
 			foundSoundTransit = true
@@ -673,7 +691,9 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockStopResp)
+		if err := json.NewEncoder(w).Encode(mockStopResp); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -685,7 +705,7 @@ func TestFindAllMatchingStops_Timeout(t *testing.T) {
 	}
 	client, err := NewOneBusAwayClientWithConfig(server.URL, "test-key", config)
 	assert.NoError(t, err)
-	
+
 	// Override HTTP client timeout to be shorter for testing
 	client.Client.Timeout = 100 * time.Millisecond
 

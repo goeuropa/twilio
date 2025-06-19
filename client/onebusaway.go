@@ -411,7 +411,7 @@ func NewOneBusAwayClientWithConfig(baseURL, apiKey string, config *ClientConfig)
 
 // getAgencyList returns the configured agency list with priority ordering
 func (c *OneBusAwayClient) getAgencyList() []string {
-	if c.config.AgencyPriority != nil && len(c.config.AgencyPriority) > 0 {
+	if len(c.config.AgencyPriority) > 0 {
 		return c.config.AgencyPriority
 	}
 	return c.config.DefaultAgencies
@@ -479,7 +479,12 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 		if err != nil {
 			return fmt.Errorf("failed to make request: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -672,7 +677,106 @@ func (c *OneBusAwayClient) GetArrivalsAndDepartures(stopID string) (*models.OneB
 		if err != nil {
 			return fmt.Errorf("failed to make request: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&obaResp); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return nil
+	})
+	responseTime := time.Since(startTime)
+
+	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
+
+		// Graceful degradation: try to use expired cached data
+		if cachedData, found, _ := c.cache.GetExpired(cacheKey); found {
+			if obaResp, ok := cachedData.(*models.OneBusAwayResponse); ok {
+				return obaResp, fmt.Errorf("using cached arrival data due to API failure: %w", err)
+			}
+		}
+
+		return nil, err
+	}
+
+	c.metrics.IncrementAPICall(responseTime)
+
+	// Validate API response structure
+	if obaResp.Code != 200 {
+		return nil, fmt.Errorf("API error: %s (code %d)", obaResp.Text, obaResp.Code)
+	}
+
+	if obaResp.Data.Entry.StopId == "" {
+		return nil, fmt.Errorf("invalid response: missing stop information")
+	}
+
+	// Cache the result with shorter TTL for time-sensitive data
+	c.cache.Set(cacheKey, &obaResp, arrivalsCacheTTLMinutes*time.Minute)
+
+	return &obaResp, nil
+}
+
+// GetArrivalsAndDeparturesWithWindow fetches arrivals and departures with a custom minutesAfter window
+func (c *OneBusAwayClient) GetArrivalsAndDeparturesWithWindow(stopID string, minutesAfter int) (*models.OneBusAwayResponse, error) {
+	fullStopID, err := c.resolveStopID(stopID)
+	if err != nil {
+		// Pass through the already structured error
+		return nil, err
+	}
+
+	// Use different cache key to include the minutesAfter parameter
+	cacheKey := fmt.Sprintf("arrivals:%s:%d", fullStopID, minutesAfter)
+	if cached, found := c.cache.Get(cacheKey); found {
+		if obaResp, ok := cached.(*models.OneBusAwayResponse); ok {
+			c.metrics.IncrementCacheHits()
+			return obaResp, nil
+		}
+	}
+	c.metrics.IncrementCacheMisses()
+
+	endpoint := fmt.Sprintf("%s/api/where/arrivals-and-departures-for-stop/%s.json", c.BaseURL, url.QueryEscape(fullStopID))
+
+	var obaResp models.OneBusAwayResponse
+	startTime := time.Now()
+	err = c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add cache-control headers for arrivals (shorter cache due to time-sensitive data)
+		req.Header.Set("Cache-Control", "max-age=60")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		q.Add("minutesBefore", "0")
+		q.Add("minutesAfter", fmt.Sprintf("%d", minutesAfter))
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -812,14 +916,14 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 
 			fullStopID := fmt.Sprintf("%s_%s", agencyID, stopID)
 			stopOption, err := c.GetStopInfoWithContext(ctx, fullStopID)
-			
+
 			// Always check if context is done before sending
 			select {
 			case <-ctx.Done():
 				return
 			default:
 			}
-			
+
 			if err == nil && stopOption != nil {
 				select {
 				case resultChan <- stopOption:
@@ -844,7 +948,7 @@ func (c *OneBusAwayClient) FindAllMatchingStops(stopID string) ([]models.StopOpt
 
 	// Collect results with timeout
 	var matchingStops []models.StopOption
-	
+
 CollectLoop:
 	for {
 		select {
@@ -922,7 +1026,12 @@ func (c *OneBusAwayClient) GetStopInfoWithContext(ctx context.Context, fullStopI
 		if err != nil {
 			return models.NewNetworkError("failed to communicate with OneBusAway API", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
 
 		if resp.StatusCode == http.StatusNotFound {
 			return models.NewStopNotFoundError(fullStopID, nil)
@@ -1061,7 +1170,12 @@ func (c *OneBusAwayClient) stopExists(stopID string) bool {
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
 
 		exists = resp.StatusCode == http.StatusOK
 		return nil
@@ -1134,7 +1248,12 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 		if err != nil {
 			return fmt.Errorf("failed to make request: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Error closing response body: %v\n", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("API returned status %d", resp.StatusCode)

@@ -67,6 +67,7 @@ func main() {
 	r.POST("/sms", smsHandler.HandleSMS)
 	r.POST("/voice", voiceHandler.HandleVoiceStart)
 	r.POST("/voice/find_stop", voiceHandler.HandleFindStop)
+	r.POST("/voice/menu_action", voiceHandler.HandleVoiceMenuAction)
 
 	log.Printf("Starting server on port %s", port)
 	log.Printf("OneBusAway API: %s", obaBaseURL)

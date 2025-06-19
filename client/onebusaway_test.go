@@ -123,11 +123,15 @@ func TestGetArrivalsAndDepartures_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "agencies-with-coverage") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockCoverage)
+			if err := json.NewEncoder(w).Encode(mockCoverage); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		} else if strings.Contains(r.URL.Path, "arrivals-and-departures-for-stop") {
 			assert.Equal(t, "test-key", r.URL.Query().Get("key"))
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockResponse)
+			if err := json.NewEncoder(w).Encode(mockResponse); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
 		} else if strings.Contains(r.URL.Path, "/api/where/stop/") {
 			w.WriteHeader(http.StatusOK)
 		} else {

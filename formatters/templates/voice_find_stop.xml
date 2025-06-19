@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say>{{.ArrivalsMessage}}</Say>
+    <Gather numDigits="1" action="/voice/menu_action?minutesAfter={{if eq .MinutesAfter 0}}60{{else}}{{add .MinutesAfter 30}}{{end}}" method="POST">
+        <Say>To hear more departures, press 1. To go back to the main menu, press 2.</Say>
+    </Gather>
 </Response>

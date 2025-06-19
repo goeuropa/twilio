@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OneBusAway Twilio Integration - A Go web application that bridges Twilio SMS and voice services with OneBusAway transit APIs, allowing users to get real-time bus arrival information via text message or phone call.
 
+## Important Rules
+
+Before saying your work is finished, you must always run these commands and ensure they pass:
+
+* make lint
+* make vet
+* make test
+* make fmt
+
 ## Common Development Commands
 
 ### Building and Running
@@ -102,7 +111,7 @@ Optional:
 ## API Endpoints
 
 - `POST /sms` - Handle incoming SMS messages (Twilio webhook)
-- `POST /voice` - Handle incoming voice calls (Twilio webhook) 
+- `POST /voice` - Handle incoming voice calls (Twilio webhook)
 - `POST /voice/find_stop` - Handle voice input/DTMF (Twilio webhook)
 - `GET /health` - Health check endpoint
 - `GET /` - Application info with coverage area status
@@ -125,7 +134,7 @@ Optional:
 
 Designed to work with any OneBusAway deployment by configuring `ONEBUSAWAY_BASE_URL`:
 - Puget Sound (default): https://api.pugetsound.onebusaway.org
-- Tampa: https://api.tampa.onebusaway.org  
+- Tampa: https://api.tampa.onebusaway.org
 - UC Davis: https://api.unitrans.onebusawaycloud.com
 
 Agency ID schemes vary by deployment - client automatically tries common prefixes and uses first successful match.

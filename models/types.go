@@ -95,4 +95,8 @@ type CoverageArea struct {
 	Radius    float64
 }
 
-
+type VoiceSession struct {
+	StopID       string `json:"stopId"`
+	MinutesAfter int    `json:"minutesAfter"`
+	CreatedAt    int64  `json:"createdAt"`
+}

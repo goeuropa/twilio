@@ -46,6 +46,7 @@ func TestRenderVoiceFindStop(t *testing.T) {
 
 	ctx := VoiceFindStopContext{
 		ArrivalsMessage: "Route 8 to Seattle Center in 3 minutes.",
+		MinutesAfter:    0,
 	}
 
 	result, err := manager.RenderVoiceFindStop(ctx)
@@ -56,7 +57,39 @@ func TestRenderVoiceFindStop(t *testing.T) {
 	assert.Contains(t, result, "<Response>")
 	assert.Contains(t, result, "</Response>")
 	assert.Contains(t, result, "<Say>Route 8 to Seattle Center in 3 minutes.</Say>")
-	assert.NotContains(t, result, "<Gather")
+
+	// Should now contain gather for menu options
+	assert.Contains(t, result, "<Gather")
+	assert.Contains(t, result, "To hear more departures")
+	assert.Contains(t, result, "press 1")
+	assert.Contains(t, result, "To go back to the main menu")
+	assert.Contains(t, result, "press 2")
+	assert.Contains(t, result, "action=\"/voice/menu_action?minutesAfter=60\"")
+}
+
+func TestRenderVoiceFindStopWithMinutesAfter(t *testing.T) {
+	manager, err := NewVoiceTemplateManager()
+	require.NoError(t, err)
+
+	// Test with MinutesAfter = 30 (should render minutesAfter=60 in URL)
+	ctx := VoiceFindStopContext{
+		ArrivalsMessage: "Route 8 to Seattle Center in 3 minutes.",
+		MinutesAfter:    30,
+	}
+
+	result, err := manager.RenderVoiceFindStop(ctx)
+	require.NoError(t, err)
+
+	// Should contain the incremented value (30 + 30 = 60)
+	assert.Contains(t, result, "action=\"/voice/menu_action?minutesAfter=60\"")
+
+	// Test with MinutesAfter = 90 (should render minutesAfter=120 in URL)
+	ctx.MinutesAfter = 90
+	result, err = manager.RenderVoiceFindStop(ctx)
+	require.NoError(t, err)
+
+	// Should contain the incremented value (90 + 30 = 120)
+	assert.Contains(t, result, "action=\"/voice/menu_action?minutesAfter=120\"")
 }
 
 func TestRenderVoiceError(t *testing.T) {

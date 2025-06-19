@@ -81,8 +81,6 @@ func TestGenerateTwiMLSMS(t *testing.T) {
 	assert.Contains(t, result, "</Response>")
 }
 
-
-
 func TestExtractStopID(t *testing.T) {
 	tests := []struct {
 		name     string

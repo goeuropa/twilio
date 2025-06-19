@@ -31,6 +31,7 @@ type VoiceStartContext struct {
 
 type VoiceFindStopContext struct {
 	ArrivalsMessage string
+	MinutesAfter    int
 }
 
 type VoiceErrorContext struct {
@@ -42,12 +43,17 @@ type VoiceDisambiguationContext struct {
 }
 
 func NewVoiceTemplateManager() (*VoiceTemplateManager, error) {
+	// Create function map for template functions
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}
+
 	startTmpl, err := template.New("voice_start").Parse(voiceStartTemplate)
 	if err != nil {
 		return nil, err
 	}
 
-	findStopTmpl, err := template.New("voice_find_stop").Parse(voiceFindStopTemplate)
+	findStopTmpl, err := template.New("voice_find_stop").Funcs(funcMap).Parse(voiceFindStopTemplate)
 	if err != nil {
 		return nil, err
 	}

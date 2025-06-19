@@ -170,7 +170,111 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 	}
 
 	// Single stop found, get arrivals directly
-	h.getAndFormatVoiceArrivals(c, matchingStops[0].FullStopID)
+	h.getAndFormatVoiceArrivalsWithSession(c, req.From, matchingStops[0].FullStopID, 0)
+}
+
+// HandleVoiceMenuAction processes menu choices from the voice response
+func (h *VoiceHandler) HandleVoiceMenuAction(c *gin.Context) {
+	var req models.TwilioVoiceRequest
+	if err := c.ShouldBind(&req); err != nil {
+		log.Printf("Failed to bind voice menu action request: %v", err)
+		c.Header("Content-Type", "text/xml")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid request format.",
+		})
+		c.String(http.StatusBadRequest, twiml)
+		return
+	}
+
+	log.Printf("Received voice menu action from %s: %s", req.From, req.Digits)
+
+	c.Header("Content-Type", "text/xml")
+
+	switch req.Digits {
+	case "1":
+		// Option 1: Hear more departures
+		h.handleExtendDepartures(c, req)
+	case "2":
+		// Option 2: Return to main menu
+		h.handleReturnToMainMenu(c, req)
+	default:
+		// Invalid choice
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Please press 1 or 2.",
+		})
+		c.String(http.StatusOK, twiml)
+	}
+}
+
+// handleExtendDepartures extends the departure window and retrieves more arrivals
+func (h *VoiceHandler) handleExtendDepartures(c *gin.Context, req models.TwilioVoiceRequest) {
+	session := h.SessionStore.GetVoiceSession(req.From)
+	if session == nil {
+		// No session exists, return to main menu
+		h.returnToMainMenu(c)
+		return
+	}
+
+	// Get minutesAfter from query parameter
+	minutesAfterStr := c.Query("minutesAfter")
+	if minutesAfterStr == "" {
+		log.Printf("Missing minutesAfter parameter in request from %s", req.From)
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
+		})
+		c.String(http.StatusOK, twiml)
+		return
+	}
+
+	newMinutesAfter, err := strconv.Atoi(minutesAfterStr)
+	if err != nil {
+		log.Printf("Invalid minutesAfter parameter: %s from %s", minutesAfterStr, req.From)
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
+		})
+		c.String(http.StatusOK, twiml)
+		return
+	}
+
+	// Update the session
+	session.MinutesAfter = newMinutesAfter
+	if err := h.SessionStore.SetVoiceSession(req.From, session); err != nil {
+		log.Printf("Failed to update voice session for %s: %v", req.From, err)
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
+		})
+		c.String(http.StatusOK, twiml)
+		return
+	}
+
+	log.Printf("Extended departures window for %s to %d minutes", req.From, newMinutesAfter)
+
+	// Get arrivals with extended window
+	h.getAndFormatVoiceArrivalsWithSession(c, req.From, session.StopID, newMinutesAfter)
+}
+
+// handleReturnToMainMenu clears the voice session and returns to the start menu
+func (h *VoiceHandler) handleReturnToMainMenu(c *gin.Context, req models.TwilioVoiceRequest) {
+	h.SessionStore.ClearVoiceSession(req.From)
+	log.Printf("Cleared voice session for %s, returning to main menu", req.From)
+	h.returnToMainMenu(c)
+}
+
+// returnToMainMenu renders the main menu
+func (h *VoiceHandler) returnToMainMenu(c *gin.Context) {
+	prompt := "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key."
+
+	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
+		WelcomePrompt: prompt,
+	})
+	if err != nil {
+		log.Printf("Failed to generate TwiML: %v", err)
+		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Error generating response.",
+		})
+	}
+
+	c.String(http.StatusOK, twiml)
 }
 
 // parseDisambiguationChoice checks if the input digits represent a single-digit choice (1-9)
@@ -215,7 +319,7 @@ func (h *VoiceHandler) handleVoiceDisambiguationChoice(c *gin.Context, req model
 
 	log.Printf("User %s selected stop %s: %s", req.From, selectedStop.FullStopID, selectedStop.DisplayText)
 
-	h.getAndFormatVoiceArrivals(c, selectedStop.FullStopID)
+	h.getAndFormatVoiceArrivalsWithSession(c, req.From, selectedStop.FullStopID, 0)
 }
 
 // formatVoiceDisambiguationMessage creates a voice-friendly disambiguation message
@@ -241,9 +345,19 @@ func (h *VoiceHandler) formatVoiceDisambiguationMessage(stops []models.StopOptio
 	return msg
 }
 
-// getAndFormatVoiceArrivals fetches arrival information and formats it for voice response
-func (h *VoiceHandler) getAndFormatVoiceArrivals(c *gin.Context, fullStopID string) {
-	obaResp, err := h.OBAClient.GetArrivalsAndDepartures(fullStopID)
+// getAndFormatVoiceArrivalsWithSession fetches arrival information with a custom window and formats it for voice response
+func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phoneNumber, fullStopID string, minutesAfter int) {
+	var obaResp *models.OneBusAwayResponse
+	var err error
+
+	// Use 30 minutes as default window if minutesAfter is 0, otherwise use provided value
+	window := minutesAfter
+	if window == 0 {
+		window = 30
+	}
+
+	obaResp, err = h.OBAClient.GetArrivalsAndDeparturesWithWindow(fullStopID, window)
+
 	if err != nil {
 		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
 		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
@@ -258,8 +372,18 @@ func (h *VoiceHandler) getAndFormatVoiceArrivals(c *gin.Context, fullStopID stri
 
 	message := formatters.FormatVoiceResponse(arrivals, stopName)
 
+	// Set up voice session for menu options
+	session := &models.VoiceSession{
+		StopID:       fullStopID,
+		MinutesAfter: minutesAfter,
+	}
+	if err := h.SessionStore.SetVoiceSession(phoneNumber, session); err != nil {
+		log.Printf("Failed to set voice session for %s: %v", phoneNumber, err)
+	}
+
 	twiml, err := h.TemplateManager.RenderVoiceFindStop(formatters.VoiceFindStopContext{
 		ArrivalsMessage: message,
+		MinutesAfter:    minutesAfter,
 	})
 	if err != nil {
 		log.Printf("Failed to generate TwiML: %v", err)

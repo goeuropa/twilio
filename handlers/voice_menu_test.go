@@ -1,0 +1,589 @@
+package handlers
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"oba-twilio/models"
+)
+
+type MockOneBusAwayClientVoiceMenu struct {
+	mock.Mock
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) GetArrivalsAndDepartures(stopID string) (*models.OneBusAwayResponse, error) {
+	args := m.Called(stopID)
+	resp := args.Get(0)
+	if resp == nil {
+		return nil, args.Error(1)
+	}
+	if response, ok := resp.(*models.OneBusAwayResponse); ok {
+		return response, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDepartures")
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) GetArrivalsAndDeparturesWithWindow(stopID string, minutesAfter int) (*models.OneBusAwayResponse, error) {
+	args := m.Called(stopID, minutesAfter)
+	resp := args.Get(0)
+	if resp == nil {
+		return nil, args.Error(1)
+	}
+	if response, ok := resp.(*models.OneBusAwayResponse); ok {
+		return response, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
+	args := m.Called(resp)
+	result := args.Get(0)
+	if result == nil {
+		return nil
+	}
+	if arrivals, ok := result.([]models.Arrival); ok {
+		return arrivals
+	}
+	return nil
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) SearchStops(query string) ([]models.Stop, error) {
+	args := m.Called(query)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	if stops, ok := result.([]models.Stop); ok {
+		return stops, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for SearchStops")
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) InitializeCoverage() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) GetCoverageArea() *models.CoverageArea {
+	args := m.Called()
+	result := args.Get(0)
+	if result == nil {
+		return nil
+	}
+	if coverage, ok := result.(*models.CoverageArea); ok {
+		return coverage
+	}
+	return nil
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) FindAllMatchingStops(stopID string) ([]models.StopOption, error) {
+	args := m.Called(stopID)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	if stops, ok := result.([]models.StopOption); ok {
+		return stops, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for FindAllMatchingStops")
+}
+
+func (m *MockOneBusAwayClientVoiceMenu) GetStopInfo(fullStopID string) (*models.StopOption, error) {
+	args := m.Called(fullStopID)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	if stopOption, ok := result.(*models.StopOption); ok {
+		return stopOption, args.Error(1)
+	}
+	return nil, fmt.Errorf("mock returned invalid type for GetStopInfo")
+}
+
+func setupVoiceMenuTestRouter() (*gin.Engine, *MockOneBusAwayClientVoiceMenu, *VoiceHandler) {
+	gin.SetMode(gin.TestMode)
+
+	mockClient := &MockOneBusAwayClientVoiceMenu{}
+	voiceHandler := NewVoiceHandler(mockClient)
+
+	r := gin.New()
+	r.POST("/voice", voiceHandler.HandleVoiceStart)
+	r.POST("/voice/find_stop", voiceHandler.HandleFindStop)
+	r.POST("/voice/menu_action", voiceHandler.HandleVoiceMenuAction)
+
+	return r, mockClient, voiceHandler
+}
+
+func TestVoiceHandler_FindStopWithMenuOptions(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_12345",
+			AgencyName:  "King County Metro",
+			StopName:    "Pine St & 3rd Ave",
+			DisplayText: "King County Metro: Pine St & 3rd Ave",
+		},
+	}
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				StopId: "1_12345",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "12345")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should contain the arrival message
+	assert.Contains(t, body, "Route 8")
+
+	// Should contain menu options
+	assert.Contains(t, body, "<Gather")
+	assert.Contains(t, body, "To hear more departures")
+	assert.Contains(t, body, "press 1")
+	assert.Contains(t, body, "To go back to the main menu")
+	assert.Contains(t, body, "press 2")
+	assert.Contains(t, body, "action=\"/voice/menu_action?minutesAfter=60\"")
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_MenuActionExtendDepartures(t *testing.T) {
+	r, mockClient, voiceHandler := setupVoiceMenuTestRouter()
+
+	// Set up voice session
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 0,
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				StopId: "1_12345",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 35,
+		},
+		{
+			RouteShortName:      "45",
+			TripHeadsign:        "Fremont",
+			MinutesUntilArrival: 45,
+		},
+	}
+
+	// Should call with extended window (30 minutes)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1") // Choice 1: extend departures
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action?minutesAfter=30", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should contain extended arrivals
+	assert.Contains(t, body, "Route 8")
+	assert.Contains(t, body, "Route 45")
+
+	// Should still contain menu options for further extension
+	assert.Contains(t, body, "<Gather")
+	assert.Contains(t, body, "To hear more departures")
+
+	// Verify session was updated
+	updatedSession := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
+	assert.NotNil(t, updatedSession)
+	assert.Equal(t, 30, updatedSession.MinutesAfter)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_MenuActionReturnToMainMenu(t *testing.T) {
+	r, _, voiceHandler := setupVoiceMenuTestRouter()
+
+	// Set up voice session
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 30,
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "2") // Choice 2: return to main menu
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should return to start menu
+	assert.Contains(t, body, "Welcome to OneBusAway")
+	assert.Contains(t, body, "enter your stop ID")
+	assert.Contains(t, body, "action=\"/voice/find_stop\"")
+
+	// Verify session was cleared
+	clearedSession := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
+	assert.Nil(t, clearedSession)
+}
+
+func TestVoiceHandler_MenuActionInvalidChoice(t *testing.T) {
+	r, _, voiceHandler := setupVoiceMenuTestRouter()
+
+	// Set up voice session
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 0,
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "3") // Invalid choice
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should contain error message
+	assert.Contains(t, body, "Please press 1 or 2")
+}
+
+func TestVoiceHandler_MenuActionNoSession(t *testing.T) {
+	r, _, _ := setupVoiceMenuTestRouter()
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should return to main menu when no session exists
+	assert.Contains(t, body, "Welcome to OneBusAway")
+	assert.Contains(t, body, "enter your stop ID")
+}
+
+func TestVoiceHandler_ExtendedDeparturesMultipleTimes(t *testing.T) {
+	r, mockClient, voiceHandler := setupVoiceMenuTestRouter()
+
+	// Set up voice session with already extended window
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 60, // Already extended twice (30 + 30)
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				StopId: "1_12345",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 75,
+		},
+	}
+
+	// Should call with further extended window (60 + 30 = 90 minutes)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1") // Choice 1: extend departures again
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action?minutesAfter=90", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify session was updated to 90 minutes
+	updatedSession := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
+	assert.NotNil(t, updatedSession)
+	assert.Equal(t, 90, updatedSession.MinutesAfter)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestSessionStore_VoiceSessionManagement(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 30,
+		CreatedAt:    time.Now().Unix(),
+	}
+
+	err := store.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	retrieved := store.GetVoiceSession("+14444444444")
+	assert.NotNil(t, retrieved)
+	assert.Equal(t, "1_12345", retrieved.StopID)
+	assert.Equal(t, 30, retrieved.MinutesAfter)
+
+	store.ClearVoiceSession("+14444444444")
+	cleared := store.GetVoiceSession("+14444444444")
+	assert.Nil(t, cleared)
+}
+
+func TestSessionStore_VoiceSessionTimeout(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Close()
+
+	session := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 30,
+		CreatedAt:    time.Now().Unix() - (sessionTimeoutMinutes+1)*60, // Expired
+	}
+
+	err := store.SetVoiceSession("+14444444444", session)
+	assert.NoError(t, err)
+
+	// Manually expire the session
+	store.mutex.Lock()
+	if storedSession, exists := store.voiceSessions["+14444444444"]; exists {
+		storedSession.CreatedAt = time.Now().Unix() - (sessionTimeoutMinutes+1)*60
+	}
+	store.mutex.Unlock()
+
+	// Getting expired session should return nil and clean it up
+	retrieved := store.GetVoiceSession("+14444444444")
+	assert.Nil(t, retrieved)
+}
+
+func TestVoiceHandler_MenuActionWithQueryParameter(t *testing.T) {
+	mockClient := &MockOneBusAwayClientVoiceMenu{}
+	voiceHandler := NewVoiceHandler(mockClient)
+	defer voiceHandler.Close()
+
+	// Set up initial session
+	initialSession := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 30,
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", initialSession)
+	require.NoError(t, err)
+
+	// Create a simple mock response using the existing structure
+	mockResponse := &models.OneBusAwayResponse{}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	// Should use the query parameter value (90) instead of session value + 30
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+
+	r := gin.New()
+	r.POST("/voice/menu_action", voiceHandler.HandleVoiceMenuAction)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1") // Choice 1: extend departures
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/menu_action?minutesAfter=90", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify session was updated to the query parameter value (90)
+	updatedSession := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
+	assert.NotNil(t, updatedSession)
+	assert.Equal(t, 90, updatedSession.MinutesAfter)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_MenuActionMissingQueryParameter(t *testing.T) {
+	mockClient := &MockOneBusAwayClientVoiceMenu{}
+	voiceHandler := NewVoiceHandler(mockClient)
+	defer voiceHandler.Close()
+
+	// Set up initial session
+	initialSession := &models.VoiceSession{
+		StopID:       "1_12345",
+		MinutesAfter: 30,
+		CreatedAt:    time.Now().Unix(),
+	}
+	err := voiceHandler.SessionStore.SetVoiceSession("+14444444444", initialSession)
+	require.NoError(t, err)
+
+	r := gin.New()
+	r.POST("/voice/menu_action", voiceHandler.HandleVoiceMenuAction)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1") // Choice 1: extend departures
+
+	w := httptest.NewRecorder()
+	// Request without minutesAfter query parameter should fail
+	req, _ := http.NewRequest("POST", "/voice/menu_action", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Should contain error message
+	assert.Contains(t, body, "Sorry, there was an error processing your request")
+
+	// Should NOT contain arrivals data or menu options
+	assert.NotContains(t, body, "<Gather")
+	assert.NotContains(t, body, "To hear more departures")
+
+	// Session should remain unchanged
+	session := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
+	assert.NotNil(t, session)
+	assert.Equal(t, 30, session.MinutesAfter) // Should still be original value
+
+	// No API calls should have been made
+	mockClient.AssertExpectations(t)
+}

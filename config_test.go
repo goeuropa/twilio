@@ -40,12 +40,20 @@ func TestServerConfiguration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalEnv := os.Getenv("ONEBUSAWAY_BASE_URL")
-			defer os.Setenv("ONEBUSAWAY_BASE_URL", originalEnv)
+			defer func() {
+				if err := os.Setenv("ONEBUSAWAY_BASE_URL", originalEnv); err != nil {
+					t.Errorf("Failed to restore env var: %v", err)
+				}
+			}()
 
 			if tt.envURL != "" {
-				os.Setenv("ONEBUSAWAY_BASE_URL", tt.envURL)
+				if err := os.Setenv("ONEBUSAWAY_BASE_URL", tt.envURL); err != nil {
+					t.Fatalf("Failed to set env var: %v", err)
+				}
 			} else {
-				os.Unsetenv("ONEBUSAWAY_BASE_URL")
+				if err := os.Unsetenv("ONEBUSAWAY_BASE_URL"); err != nil {
+					t.Fatalf("Failed to unset env var: %v", err)
+				}
 			}
 
 			obaBaseURL := os.Getenv("ONEBUSAWAY_BASE_URL")
@@ -82,9 +90,15 @@ func TestAPIKeyConfiguration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalEnv := os.Getenv("ONEBUSAWAY_API_KEY")
-			defer os.Setenv("ONEBUSAWAY_API_KEY", originalEnv)
+			defer func() {
+				if err := os.Setenv("ONEBUSAWAY_API_KEY", originalEnv); err != nil {
+					t.Errorf("Failed to restore env var: %v", err)
+				}
+			}()
 
-			os.Setenv("ONEBUSAWAY_API_KEY", tt.envKey)
+			if err := os.Setenv("ONEBUSAWAY_API_KEY", tt.envKey); err != nil {
+				t.Fatalf("Failed to set env var: %v", err)
+			}
 
 			obaAPIKey := os.Getenv("ONEBUSAWAY_API_KEY")
 			// In tests, we skip the validation logic since we're testing client construction

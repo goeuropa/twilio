@@ -78,8 +78,6 @@ func GenerateTwiMLSMS(message string) (string, error) {
 	return xml.Header + string(output), nil
 }
 
-
-
 func formatArrivalTime(minutes int) string {
 	if minutes <= 0 {
 		return "Now"
