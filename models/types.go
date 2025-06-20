@@ -100,3 +100,11 @@ type VoiceSession struct {
 	MinutesAfter int    `json:"minutesAfter"`
 	CreatedAt    int64  `json:"createdAt"`
 }
+
+type SMSSession struct {
+	LastStopID    string `json:"lastStopId"`
+	Language      string `json:"language"`
+	LastQueryTime int64  `json:"lastQueryTime"`
+	WindowMinutes int    `json:"windowMinutes"`
+	CreatedAt     int64  `json:"createdAt"`
+}

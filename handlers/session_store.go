@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	sessionTimeoutMinutes  = 10
-	cleanupIntervalMinutes = 5
-	maxSessions            = 10000
+	sessionTimeoutMinutes    = 10
+	smsSessionTimeoutMinutes = 15
+	cleanupIntervalMinutes   = 5
+	maxSessions              = 10000
 )
 
 var phoneRegex = regexp.MustCompile(`^\+1\d{10}$`)
@@ -21,6 +22,7 @@ var phoneRegex = regexp.MustCompile(`^\+1\d{10}$`)
 type SessionStore struct {
 	sessions      map[string]*models.DisambiguationSession
 	voiceSessions map[string]*models.VoiceSession
+	smsSessions   map[string]*models.SMSSession
 	accessTimes   map[string]int64 // Track last access time for LRU
 	mutex         sync.RWMutex
 	ctx           context.Context
@@ -33,6 +35,7 @@ func NewSessionStore() *SessionStore {
 	store := &SessionStore{
 		sessions:      make(map[string]*models.DisambiguationSession),
 		voiceSessions: make(map[string]*models.VoiceSession),
+		smsSessions:   make(map[string]*models.SMSSession),
 		accessTimes:   make(map[string]int64),
 		ctx:           ctx,
 		cancel:        cancel,
@@ -58,6 +61,7 @@ func (s *SessionStore) evictOldestSession() {
 	if oldestPhone != "" {
 		delete(s.sessions, oldestPhone)
 		delete(s.voiceSessions, oldestPhone)
+		delete(s.smsSessions, oldestPhone)
 		delete(s.accessTimes, oldestPhone)
 	}
 }
@@ -66,7 +70,7 @@ func (s *SessionStore) evictOldestSession() {
 func (s *SessionStore) GetSessionCount() int {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	return len(s.sessions) + len(s.voiceSessions)
+	return len(s.sessions) + len(s.voiceSessions) + len(s.smsSessions)
 }
 
 func (s *SessionStore) SetDisambiguationSession(phoneNumber string, session *models.DisambiguationSession) error {
@@ -132,7 +136,7 @@ func (s *SessionStore) SetVoiceSession(phoneNumber string, session *models.Voice
 	defer s.mutex.Unlock()
 
 	// Check session limit and evict oldest if necessary
-	if len(s.sessions)+len(s.voiceSessions) >= maxSessions {
+	if len(s.sessions)+len(s.voiceSessions)+len(s.smsSessions) >= maxSessions {
 		s.evictOldestSession()
 	}
 
@@ -177,6 +181,61 @@ func (s *SessionStore) ClearVoiceSession(phoneNumber string) {
 	delete(s.accessTimes, phoneNumber)
 }
 
+func (s *SessionStore) SetSMSSession(phoneNumber string, session *models.SMSSession) error {
+	if !phoneRegex.MatchString(phoneNumber) {
+		return fmt.Errorf("invalid phone number format: %s", phoneNumber)
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// Check session limit and evict oldest if necessary
+	if len(s.sessions)+len(s.voiceSessions)+len(s.smsSessions) >= maxSessions {
+		s.evictOldestSession()
+	}
+
+	now := time.Now().Unix()
+	session.CreatedAt = now
+	session.LastQueryTime = now
+	s.smsSessions[phoneNumber] = session
+	s.accessTimes[phoneNumber] = now
+	return nil
+}
+
+func (s *SessionStore) GetSMSSession(phoneNumber string) *models.SMSSession {
+	if !phoneRegex.MatchString(phoneNumber) {
+		return nil // Invalid phone number format
+	}
+
+	s.mutex.Lock() // Use write lock for simplicity and to update access time
+	defer s.mutex.Unlock()
+
+	session, exists := s.smsSessions[phoneNumber]
+	if !exists {
+		return nil
+	}
+
+	// Check expiry and clean up in single critical section
+	if time.Now().Unix()-session.CreatedAt > smsSessionTimeoutMinutes*60 {
+		delete(s.smsSessions, phoneNumber)
+		delete(s.accessTimes, phoneNumber)
+		return nil
+	}
+
+	// Update access time for LRU
+	s.accessTimes[phoneNumber] = time.Now().Unix()
+
+	return session
+}
+
+func (s *SessionStore) ClearSMSSession(phoneNumber string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	delete(s.smsSessions, phoneNumber)
+	delete(s.accessTimes, phoneNumber)
+}
+
 func (s *SessionStore) Close() {
 	s.closeOnce.Do(func() {
 		s.cancel()
@@ -207,6 +266,14 @@ func (s *SessionStore) cleanupExpiredSessions() {
 			for phoneNumber, session := range s.voiceSessions {
 				if now-session.CreatedAt > sessionTimeoutMinutes*60 {
 					delete(s.voiceSessions, phoneNumber)
+					delete(s.accessTimes, phoneNumber)
+				}
+			}
+
+			// Clean up SMS sessions
+			for phoneNumber, session := range s.smsSessions {
+				if now-session.CreatedAt > smsSessionTimeoutMinutes*60 {
+					delete(s.smsSessions, phoneNumber)
 					delete(s.accessTimes, phoneNumber)
 				}
 			}

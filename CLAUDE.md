@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OneBusAway Twilio Integration - A Go web application that bridges Twilio SMS and voice services with OneBusAway transit APIs, allowing users to get real-time bus arrival information via text message or phone call.
+OneBusAway Twilio Integration - A Go web application that bridges Twilio SMS and voice services with OneBusAway transit APIs, allowing users to get real-time bus arrival information via text message or phone call. The application supports multiple languages and provides a complete localization system.
 
 ## Important Rules
 
@@ -20,42 +20,52 @@ Before saying your work is finished, you must always run these commands and ensu
 ### Building and Running
 ```bash
 # Build the application
-go build -o oba-twilio .
+make build
 
 # Run in development mode
-go run main.go
+make dev
+
+# Build and run
+make run
 
 # Run with environment variables
-PORT=3000 ONEBUSAWAY_API_KEY=your_key go run main.go
+PORT=3000 ONEBUSAWAY_API_KEY=your_key SUPPORTED_LANGUAGES=en-US,es-US go run main.go
 ```
 
 ### Testing
 ```bash
 # Run all tests
-go test ./...
+make test
 
 # Run tests with coverage
-go test -cover ./...
+make test-coverage
 
 # Run tests with verbose output (includes live API calls)
-go test -v ./...
+make test-verbose
 
 # Skip integration tests (faster for development)
-go test -short ./...
+make test-short
 
 # Test individual packages
 go test ./client         # Test OneBusAway client
 go test ./formatters     # Test response formatting
+go test ./localization   # Test localization system
 go test .               # Test main application logic
 ```
 
 ### Dependencies
 ```bash
 # Install/update dependencies
-go mod download
+make deps
 
 # Tidy up go.mod and go.sum
-go mod tidy
+make tidy
+
+# Clean build artifacts
+make clean
+
+# Format code
+make fmt
 ```
 
 ## Architecture
@@ -63,9 +73,10 @@ go mod tidy
 ### Core Components
 
 **main.go** - HTTP server setup with Gin routes and initialization
-- Loads environment configuration
+- Loads environment configuration (.env file support)
+- Initializes localization system with multi-language support
 - Initializes OneBusAway client with coverage area detection
-- Sets up SMS and voice handlers
+- Sets up SMS and voice handlers with localization context
 - Configures health check endpoints
 
 **client/onebusaway.go** - OneBusAway API client with caching and circuit breaker
@@ -84,9 +95,24 @@ go mod tidy
 - `voice_templates.go` - Template-based voice response system using embedded XML templates
 - `templates/*.xml` - Voice response templates (start, error, disambiguation, find_stop)
 
-**models/types.go** - Data structures for Twilio requests and OneBusAway responses
+**localization/** - Multi-language support system
+- `manager.go` - Thread-safe localization manager with concurrent string lookup
+- `types.go` - Localization data structures and interfaces
+- `test_helper.go` - Testing utilities for localization
+- Supports 10 languages: English, Spanish, French, German, Arabic, Korean, Polish, Portuguese, Russian, Chinese
+
+**locales/** - Language-specific string resources
+- JSON files for each supported language (en-US.json, es-US.json, etc.)
+- Voice prompts, error messages, and user interface strings
+- Structured for easy addition of new languages
+
+**models/** - Data structures and error definitions
+- `types.go` - Twilio requests and OneBusAway API response structures
+- `errors.go` - Custom error types and error handling
 
 ### Key Features
+
+**Multi-language Support**: Complete localization system supporting 10 languages with thread-safe string lookup
 
 **Stop ID Resolution**: Automatically tries agency prefixes (1_75403, 40_75403, etc.) when user provides numeric stop ID (75403)
 
@@ -94,7 +120,7 @@ go mod tidy
 
 **Coverage Area Detection**: Calculates geographic center and radius from all transit agencies at startup to optimize stop searches
 
-**Template-based Voice Responses**: Uses embedded XML templates for consistent TwiML generation
+**Template-based Voice Responses**: Uses embedded XML templates for consistent TwiML generation with localized strings
 
 **Caching Strategy**: Multi-tier caching with different TTLs - 5min for general data, 1min for time-sensitive arrivals, 60min for static coverage data
 
@@ -106,7 +132,10 @@ Required:
 Optional:
 - `PORT` - Server port (default: 8080)
 - `ONEBUSAWAY_BASE_URL` - API base URL (default: https://api.pugetsound.onebusaway.org)
+- `SUPPORTED_LANGUAGES` - Comma-separated language codes (default: "en-US")
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` - For outbound Twilio features
+
+Environment file support via `.env` file in project root.
 
 ## API Endpoints
 
@@ -122,6 +151,7 @@ Optional:
 - `client/*_test.go` - API client and coverage calculation tests
 - `formatters/*_test.go` - Response formatting and template tests
 - `handlers/*_test.go` - Request handling and disambiguation logic tests
+- `localization/*_test.go` - Localization manager and string lookup tests
 
 **Integration Tests**: Include live API calls (skipped with `-short` flag)
 - Test real OneBusAway API responses

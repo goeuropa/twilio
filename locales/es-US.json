@@ -17,5 +17,15 @@
   "voice.time.minute": "1 min",
   "sms.no_stops_found": "Lo siento, no se encontraron paradas con ID %s. Por favor verifique e inténtelo de nuevo.",
   "sms.no_arrivals": "No se encontraron próximas llegadas para esta parada.",
-  "sms.service_unavailable": "El servicio OneBusAway no está disponible temporalmente. Por favor inténtelo de nuevo."
+  "sms.service_unavailable": "El servicio OneBusAway no está disponible temporalmente. Por favor inténtelo de nuevo.",
+  "sms.help": "Envíe un ID de parada (ej. 75403) para obtener llegadas. Responda 'more' para autobuses posteriores, 'help' para este mensaje.",
+  "sms.menu.more_hint": "Responda 'more' para autobuses posteriores",
+  "sms.menu.new_hint": "Responda 'new' para una parada diferente",
+  "sms.menu.help_hint": "Responda 'help' para información de uso",
+  "sms.language.switched": "Idioma cambiado a Español",
+  "sms.keyword.more": "Mostrando autobuses en los próximos %d minutos:",
+  "sms.keyword.invalid": "No entiendo '%s'. Envíe un ID de parada o responda 'help' para información de uso.",
+  "sms.session.expired": "Sesión expirada. Por favor envíe un ID de parada para comenzar.",
+  "sms.error.invalid_stop": "Por favor envíe un ID de parada válido (ej. 75403).",
+  "sms.error.search_failed": "Lo siento, no pude buscar la parada %s. Por favor verifique el ID de la parada e inténtelo de nuevo."
 }
