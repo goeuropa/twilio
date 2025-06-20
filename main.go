@@ -1,17 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
+	"oba-twilio/analytics"
+	"oba-twilio/analytics/providers/plausible"
 	"oba-twilio/client"
 	"oba-twilio/handlers"
 	"oba-twilio/health"
 	"oba-twilio/localization"
+	"oba-twilio/middleware"
 )
 
 func main() {
@@ -49,6 +55,73 @@ func main() {
 
 	log.Printf("Localization initialized with languages: %s", supportedLanguages)
 
+	// Load analytics configuration
+	analyticsConfig, err := analytics.LoadConfigFromEnv()
+	if err != nil {
+		log.Printf("Analytics config error: %v", err)
+		analyticsConfig = analytics.DefaultConfig()
+	}
+
+	// Create analytics manager
+	analyticsManager := analytics.NewManager(analyticsConfig)
+
+	// Register Plausible provider if enabled
+	if analyticsConfig.Enabled {
+		for _, providerConfig := range analyticsConfig.Providers {
+			if providerConfig.Name == "plausible" && providerConfig.Enabled {
+				// Extract config values safely
+				domain, ok := providerConfig.Config["domain"].(string)
+				if !ok {
+					log.Printf("Invalid plausible domain configuration")
+					continue
+				}
+
+				plausibleConfig := plausible.DefaultConfig()
+				plausibleConfig.Domain = domain
+
+				// Set optional configurations
+				if apiURL, ok := providerConfig.Config["api_url"].(string); ok {
+					plausibleConfig.APIURL = apiURL
+				}
+				if apiKey, ok := providerConfig.Config["api_key"].(string); ok {
+					plausibleConfig.APIKey = apiKey
+				}
+				if batchSize, ok := providerConfig.Config["batch_size"].(int); ok {
+					plausibleConfig.BatchSize = batchSize
+				}
+				if flushInterval, ok := providerConfig.Config["flush_interval"].(time.Duration); ok {
+					plausibleConfig.FlushInterval = flushInterval
+				}
+				if httpTimeout, ok := providerConfig.Config["http_timeout"].(time.Duration); ok {
+					plausibleConfig.HTTPTimeout = httpTimeout
+				}
+				if maxRetries, ok := providerConfig.Config["max_retries"].(int); ok {
+					plausibleConfig.MaxRetries = maxRetries
+				}
+				if retryDelay, ok := providerConfig.Config["retry_delay"].(time.Duration); ok {
+					plausibleConfig.RetryDelay = retryDelay
+				}
+
+				plausibleProvider, err := plausible.NewProvider(plausibleConfig)
+				if err != nil {
+					log.Printf("Failed to create plausible provider: %v", err)
+					continue
+				}
+
+				if err := analyticsManager.RegisterProvider("plausible", plausibleProvider); err != nil {
+					log.Printf("Failed to register plausible provider: %v", err)
+				}
+			}
+		}
+	}
+
+	// Start analytics manager
+	if err := analyticsManager.Start(); err != nil {
+		log.Printf("Failed to start analytics manager: %v", err)
+	}
+
+	log.Printf("Analytics initialized - enabled: %v, providers: %v", analyticsConfig.Enabled, analyticsManager.GetProviderNames())
+
 	obaClient := client.NewOneBusAwayClient(obaBaseURL, obaAPIKey)
 
 	log.Printf("Initializing coverage area for OneBusAway server...")
@@ -67,6 +140,10 @@ func main() {
 
 	smsHandler := handlers.NewSMSHandler(obaClient, locManager)
 	voiceHandler := handlers.NewVoiceHandler(obaClient, locManager)
+
+	// Pass analytics manager to handlers
+	handlers.SetAnalyticsManager(smsHandler, analyticsManager, analyticsConfig.HashSalt)
+	handlers.SetAnalyticsManager(voiceHandler, analyticsManager, analyticsConfig.HashSalt)
 
 	// Initialize health check system
 	healthManager := health.NewManager(
@@ -88,6 +165,12 @@ func main() {
 	healthHandler := health.NewHandler(healthManager)
 
 	r := gin.Default()
+
+	// Add analytics middleware
+	r.Use(middleware.NewAnalyticsMiddleware(analyticsManager, middleware.AnalyticsConfig{
+		Enabled:  analyticsConfig.Enabled,
+		HashSalt: analyticsConfig.HashSalt,
+	}).Handler())
 
 	// Add health check middleware
 	r.Use(healthHandler.HealthMiddleware())
@@ -131,7 +214,32 @@ func main() {
 	log.Printf("  - GET /health/stats (basic statistics)")
 	log.Printf("  - GET /health/config (configuration info)")
 
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	// Set up graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := r.Run(":" + port); err != nil {
+			log.Fatal("Failed to start server:", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-sigChan
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Flush and close analytics
+	log.Println("Flushing analytics...")
+	if err := analyticsManager.Flush(shutdownCtx); err != nil {
+		log.Printf("Analytics flush error: %v", err)
 	}
+	if err := analyticsManager.Close(); err != nil {
+		log.Printf("Analytics close error: %v", err)
+	}
+
+	log.Println("Server stopped gracefully")
 }

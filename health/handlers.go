@@ -39,7 +39,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	defer rl.mu.Unlock()
 
 	now := time.Now()
-	
+
 	// Clean up old entries periodically
 	if now.After(rl.cleanupAt) {
 		rl.cleanup(now)
@@ -48,7 +48,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 	// Get request history for this IP
 	requests := rl.requests[ip]
-	
+
 	// Remove old requests outside the window
 	cutoff := now.Add(-rl.window)
 	valid := requests[:0]
@@ -57,13 +57,13 @@ func (rl *RateLimiter) Allow(ip string) bool {
 			valid = append(valid, req)
 		}
 	}
-	
+
 	// Check if under limit
 	if len(valid) >= rl.maxReqs {
 		rl.requests[ip] = valid
 		return false
 	}
-	
+
 	// Add new request and allow
 	rl.requests[ip] = append(valid, now)
 	return true
@@ -267,7 +267,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	// Apply rate limiting to all health endpoints
 	rateLimited := router.Group("/")
 	rateLimited.Use(h.rateLimitMiddleware())
-	
+
 	// Basic health check (liveness probe)
 	rateLimited.GET("/health", h.HealthHandler)
 

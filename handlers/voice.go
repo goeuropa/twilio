@@ -11,6 +11,7 @@ import (
 	"oba-twilio/client"
 	"oba-twilio/formatters"
 	"oba-twilio/localization"
+	"oba-twilio/middleware"
 	"oba-twilio/models"
 	"oba-twilio/validation"
 )
@@ -21,6 +22,8 @@ type VoiceHandler struct {
 	TemplateManager     *formatters.VoiceTemplateManager
 	LocalizationManager *localization.LocalizationManager
 	ErrorHandler        *ErrorHandler
+	analyticsManager    middleware.AnalyticsManager
+	analyticsHashSalt   string
 }
 
 func NewVoiceHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *VoiceHandler {
@@ -62,6 +65,11 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	log.Printf("Received voice call from %s", req.From)
 
 	language := h.getLanguageFromRequest(c)
+
+	// Track voice request
+	if h.analyticsManager != nil {
+		middleware.TrackVoiceRequest(c.Request.Context(), h.analyticsManager, req.From, language, h.analyticsHashSalt)
+	}
 
 	// Handle language selection based on supported languages count
 	languageCount := h.LocalizationManager.GetLanguageCount()

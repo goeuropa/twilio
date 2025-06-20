@@ -406,22 +406,22 @@ func (m *Manager) collectDependencyInfo() map[string]DependencyInfo {
 				if metrics.APICallCount > 0 {
 					errorRate = float64(metrics.APIErrorCount) / float64(metrics.APICallCount)
 				}
-				
+
 				avgResponseTime := time.Duration(0)
 				if metrics.APICallCount > 0 {
 					avgResponseTime = metrics.TotalResponseTime / time.Duration(metrics.APICallCount)
 				}
 
 				dependencies["onebusaway_api"] = DependencyInfo{
-					Name:           "OneBusAway API",
-					Status:         StatusHealthy, // Would be determined by thresholds
-					ResponseTime:   avgResponseTime,
-					LastChecked:    time.Now(),
-					SuccessRate:    (1.0 - errorRate) * 100,
-					ErrorCount:     metrics.APIErrorCount,
-					RequestCount:   metrics.APICallCount,
+					Name:         "OneBusAway API",
+					Status:       StatusHealthy, // Would be determined by thresholds
+					ResponseTime: avgResponseTime,
+					LastChecked:  time.Now(),
+					SuccessRate:  (1.0 - errorRate) * 100,
+					ErrorCount:   metrics.APIErrorCount,
+					RequestCount: metrics.APICallCount,
 					Metadata: map[string]interface{}{
-						"cache_hit_rate": float64(metrics.CacheHits) / float64(metrics.CacheHits+metrics.CacheMisses) * 100,
+						"cache_hit_rate":        float64(metrics.CacheHits) / float64(metrics.CacheHits+metrics.CacheMisses) * 100,
 						"circuit_breaker_opens": metrics.CircuitBreakerOpen,
 					},
 				}

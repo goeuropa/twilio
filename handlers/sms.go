@@ -14,6 +14,7 @@ import (
 	"oba-twilio/client"
 	"oba-twilio/formatters"
 	"oba-twilio/localization"
+	"oba-twilio/middleware"
 	"oba-twilio/models"
 	"oba-twilio/validation"
 )
@@ -30,6 +31,8 @@ type SMSHandler struct {
 	SessionStore        *SessionStore
 	LocalizationManager *localization.LocalizationManager
 	ErrorHandler        *ErrorHandler
+	analyticsManager    middleware.AnalyticsManager
+	analyticsHashSalt   string
 }
 
 func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *SMSHandler {
@@ -76,6 +79,11 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	// Get or create SMS session for language persistence
 	smsSession := h.getOrCreateSMSSession(req.From)
 
+	// Track SMS request
+	if h.analyticsManager != nil {
+		middleware.TrackSMSRequest(c.Request.Context(), h.analyticsManager, req.From, smsSession.Language, req.Body, h.analyticsHashSalt)
+	}
+
 	// Check for keywords first
 	if h.handleKeywords(c, req, smsSession) {
 		return
@@ -119,8 +127,25 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	}
 
 	// Find all matching stops for the given ID
+	startTime := time.Now()
 	matchingStops, err := h.OBAClient.FindAllMatchingStops(stopID)
+	latencyMS := time.Since(startTime).Milliseconds()
+
+	// Track stop lookup
+	if h.analyticsManager != nil {
+		success := err == nil
+		agencyName := ""
+		if len(matchingStops) > 0 {
+			agencyName = matchingStops[0].AgencyName
+		}
+		middleware.TrackStopLookup(c.Request.Context(), h.analyticsManager, req.From, stopID, agencyName, h.analyticsHashSalt, success, latencyMS)
+	}
+
 	if err != nil {
+		// Track error
+		if h.analyticsManager != nil {
+			middleware.TrackError(c.Request.Context(), h.analyticsManager, req.From, "stop_lookup", err.Error(), h.analyticsHashSalt)
+		}
 		h.ErrorHandler.HandleSMSError(c, err, language)
 		return
 	}
@@ -143,6 +168,12 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 		if err := h.SessionStore.SetDisambiguationSession(req.From, session); err != nil {
 			h.ErrorHandler.HandleInternalError(c, err, "sms", language)
 			return
+		}
+
+		// Track disambiguation presented
+		if h.analyticsManager != nil {
+			sessionID := fmt.Sprintf("sms_%s_%d", req.From, time.Now().Unix())
+			middleware.TrackDisambiguationPresented(c.Request.Context(), h.analyticsManager, req.From, sessionID, h.analyticsHashSalt, len(matchingStops))
 		}
 
 		twiml, _ := formatters.GenerateTwiMLSMS(disambiguationMsg)
@@ -172,6 +203,12 @@ func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.Twili
 	h.SessionStore.ClearDisambiguationSession(req.From)
 
 	log.Printf("User %s selected stop %s: %s", req.From, selectedStop.FullStopID, selectedStop.DisplayText)
+
+	// Track disambiguation selection
+	if h.analyticsManager != nil {
+		sessionID := fmt.Sprintf("sms_%s_%d", req.From, time.Now().Unix())
+		middleware.TrackDisambiguationSelected(c.Request.Context(), h.analyticsManager, req.From, sessionID, h.analyticsHashSalt, choice, selectedStop.FullStopID)
+	}
 
 	// Get SMS session for this user to maintain consistency
 	smsSession := h.getOrCreateSMSSession(req.From)
@@ -432,4 +469,16 @@ func (h *SMSHandler) getLanguageForUser(phoneNumber string) string {
 		return session.Language
 	}
 	return h.LocalizationManager.GetPrimaryLanguage()
+}
+
+// SetAnalyticsManager sets the analytics manager for the SMS handler
+func SetAnalyticsManager(handler interface{}, manager middleware.AnalyticsManager, hashSalt string) {
+	switch h := handler.(type) {
+	case *SMSHandler:
+		h.analyticsManager = manager
+		h.analyticsHashSalt = hashSalt
+	case *VoiceHandler:
+		h.analyticsManager = manager
+		h.analyticsHashSalt = hashSalt
+	}
 }
