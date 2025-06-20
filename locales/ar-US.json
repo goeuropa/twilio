@@ -23,5 +23,8 @@
   "voice.arrival.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
   "sms.no_stops_found": "عذرا، لم يتم العثور على محطات برقم %s. يرجى التحقق والمحاولة مرة أخرى.",
   "sms.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
-  "sms.service_unavailable": "خدمة OneBusAway غير متاحة مؤقتا. يرجى المحاولة مرة أخرى."
+  "sms.service_unavailable": "خدمة OneBusAway غير متاحة مؤقتا. يرجى المحاولة مرة أخرى.",
+  "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
+  "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",
+  "voice.error.invalid_choice": "Please press a number between 1 and %d."
 }

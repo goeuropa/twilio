@@ -23,5 +23,8 @@
   "voice.arrival.no_arrivals": "Ближайших прибытий для этой остановки не найдено.",
   "sms.no_stops_found": "Извините, остановки с ID %s не найдены. Пожалуйста, проверьте и попробуйте снова.",
   "sms.no_arrivals": "Ближайших прибытий для этой остановки не найдено.",
-  "sms.service_unavailable": "Сервис OneBusAway временно недоступен. Пожалуйста, попробуйте снова."
+  "sms.service_unavailable": "Сервис OneBusAway временно недоступен. Пожалуйста, попробуйте снова.",
+  "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
+  "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",
+  "voice.error.invalid_choice": "Please press a number between 1 and %d."
 }

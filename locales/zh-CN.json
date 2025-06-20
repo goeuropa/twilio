@@ -23,5 +23,8 @@
   "voice.arrival.no_arrivals": "该站点没有即将到达的班次。",
   "sms.no_stops_found": "抱歉，找不到ID为%s的站点。请检查后重试。",
   "sms.no_arrivals": "该站点没有即将到达的班次。",
-  "sms.service_unavailable": "OneBusAway服务暂时不可用。请重试。"
+  "sms.service_unavailable": "OneBusAway服务暂时不可用。请重试。",
+  "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
+  "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",
+  "voice.error.invalid_choice": "Please press a number between 1 and %d."
 }

@@ -13,6 +13,7 @@ import (
 	"oba-twilio/formatters"
 	"oba-twilio/localization"
 	"oba-twilio/models"
+	"oba-twilio/validation"
 )
 
 type VoiceHandler struct {
@@ -56,6 +57,17 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 		return
 	}
 
+	// Validate phone number
+	if err := validation.ValidatePhoneNumber(req.From); err != nil {
+		log.Printf("Invalid phone number from %s: %v", req.From, err)
+		c.Header("Content-Type", "text/xml")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid phone number format.",
+		})
+		c.String(http.StatusBadRequest, twiml)
+		return
+	}
+
 	log.Printf("Received voice call from %s", req.From)
 
 	language := h.getLanguageFromRequest(c)
@@ -90,12 +102,51 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 		return
 	}
 
+	// Validate phone number
+	if err := validation.ValidatePhoneNumber(req.From); err != nil {
+		log.Printf("Invalid phone number from %s: %v", req.From, err)
+		c.Header("Content-Type", "text/xml")
+		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+			ErrorMessage: "Invalid phone number format.",
+		})
+		c.String(http.StatusBadRequest, twiml)
+		return
+	}
+
+	// Validate call SID if provided
+	if req.CallSid != "" {
+		if err := validation.ValidateTwilioCallSid(req.CallSid); err != nil {
+			log.Printf("Invalid call SID from %s: %v", req.From, err)
+		}
+	}
+
+	// Sanitize digits input
+	req.Digits = validation.SanitizeUserInput(req.Digits)
+
 	log.Printf("Received voice input from %s: %s", req.From, req.Digits)
 
 	c.Header("Content-Type", "text/xml")
 
 	// Check if user is responding to a disambiguation request
 	if choice := h.parseDisambiguationChoice(req.Digits); choice > 0 {
+		// Additional validation for the choice
+		session := h.SessionStore.GetDisambiguationSession(req.From)
+		if session != nil {
+			maxChoices := len(session.StopOptions)
+			if maxChoices > 9 {
+				maxChoices = 9 // Voice interface limits to single digits
+			}
+			if err := validation.ValidateDisambiguationChoice(req.Digits, maxChoices); err != nil {
+				log.Printf("Invalid disambiguation choice from %s: %v", req.From, err)
+				language := h.getLanguageFromRequest(c)
+				errorMsg := h.LocalizationManager.GetString("voice.error.invalid_choice", language, maxChoices)
+				twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+					ErrorMessage: errorMsg,
+				})
+				c.String(http.StatusOK, twiml)
+				return
+			}
+		}
 		h.handleVoiceDisambiguationChoice(c, req, choice)
 		return
 	}
@@ -112,9 +163,13 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 		return
 	}
 
-	if len(stopID) < 3 || len(stopID) > 10 {
+	// Validate stop ID format and security
+	if err := validation.ValidateStopID(stopID); err != nil {
+		log.Printf("Invalid stop ID from %s: %s, error: %v", req.From, stopID, err)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_stop_id", language)
 		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid stop ID. Please try calling again with a valid stop ID.",
+			ErrorMessage: errorMsg,
 		})
 		c.String(http.StatusOK, twiml)
 		return

@@ -23,5 +23,8 @@
   "voice.arrival.no_arrivals": "이 정류장에 예정된 도착 정보가 없습니다.",
   "sms.no_stops_found": "죄송합니다. ID %s로 정류장을 찾을 수 없습니다. 확인 후 다시 시도해 주세요.",
   "sms.no_arrivals": "이 정류장에 예정된 도착 정보가 없습니다.",
-  "sms.service_unavailable": "OneBusAway 서비스가 일시적으로 사용할 수 없습니다. 다시 시도해 주세요."
+  "sms.service_unavailable": "OneBusAway 서비스가 일시적으로 사용할 수 없습니다. 다시 시도해 주세요.",
+  "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
+  "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",
+  "voice.error.invalid_choice": "Please press a number between 1 and %d."
 }

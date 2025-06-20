@@ -15,6 +15,7 @@ import (
 	"oba-twilio/formatters"
 	"oba-twilio/localization"
 	"oba-twilio/models"
+	"oba-twilio/validation"
 )
 
 // Pre-compiled regex patterns for performance
@@ -54,6 +55,27 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 		return
 	}
 
+	// Validate phone number
+	if err := validation.ValidatePhoneNumber(req.From); err != nil {
+		log.Printf("Invalid phone number from %s: %v", req.From, err)
+		c.Header("Content-Type", "text/xml")
+		twiml, _ := formatters.GenerateTwiMLSMS("Invalid phone number format.")
+		c.String(http.StatusBadRequest, twiml)
+		return
+	}
+
+	// Validate and sanitize message body
+	if err := validation.ValidateMessageBody(req.Body); err != nil {
+		log.Printf("Invalid message body from %s: %v", req.From, err)
+		c.Header("Content-Type", "text/xml")
+		twiml, _ := formatters.GenerateTwiMLSMS("Message contains invalid content.")
+		c.String(http.StatusBadRequest, twiml)
+		return
+	}
+
+	// Sanitize the message body
+	req.Body = validation.SanitizeUserInput(req.Body)
+
 	log.Printf("Received SMS from %s: %s", req.From, req.Body)
 
 	c.Header("Content-Type", "text/xml")
@@ -68,6 +90,17 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 
 	// Check if user is responding to a disambiguation request
 	if choice := formatters.IsDisambiguationChoice(req.Body); choice > 0 {
+		// Additional validation for the choice
+		session := h.SessionStore.GetDisambiguationSession(req.From)
+		if session != nil {
+			if err := validation.ValidateDisambiguationChoice(req.Body, len(session.StopOptions)); err != nil {
+				log.Printf("Invalid disambiguation choice from %s: %v", req.From, err)
+				errorMsg := h.LocalizationManager.GetString("sms.error.invalid_choice", h.getLanguageForUser(req.From), len(session.StopOptions))
+				twiml, _ := formatters.GenerateTwiMLSMS(errorMsg)
+				c.String(http.StatusOK, twiml)
+				return
+			}
+		}
 		h.handleDisambiguationChoice(c, req, choice)
 		return
 	}
@@ -388,8 +421,10 @@ func (h *SMSHandler) handleTimeQuery(c *gin.Context, req models.TwilioSMSRequest
 func (h *SMSHandler) extractLanguageFromMessage(message string, session *models.SMSSession) (string, string) {
 	parts := strings.SplitN(strings.TrimSpace(message), " ", 2)
 	if len(parts) == 2 {
-		if h.LocalizationManager.IsSupported(parts[0]) {
-			return parts[0], formatters.ExtractStopID(parts[1])
+		// Validate language code format
+		if err := validation.ValidateLanguageCode(parts[0]); err == nil && h.LocalizationManager.IsSupported(parts[0]) {
+			stopID := h.extractAndValidateStopID(parts[1])
+			return parts[0], stopID
 		}
 	}
 	// Use session language if available, otherwise primary language
@@ -397,5 +432,27 @@ func (h *SMSHandler) extractLanguageFromMessage(message string, session *models.
 	if language == "" {
 		language = h.LocalizationManager.GetPrimaryLanguage()
 	}
-	return language, formatters.ExtractStopID(message)
+	return language, h.extractAndValidateStopID(message)
+}
+
+// extractAndValidateStopID extracts and validates a stop ID from a message
+func (h *SMSHandler) extractAndValidateStopID(message string) string {
+	// Use the existing extraction logic but add validation
+	stopID := formatters.ExtractStopID(message)
+	if stopID != "" {
+		if err := validation.ValidateStopID(stopID); err != nil {
+			log.Printf("Invalid stop ID format: %s, error: %v", stopID, err)
+			return ""
+		}
+	}
+	return stopID
+}
+
+// getLanguageForUser gets the preferred language for a user
+func (h *SMSHandler) getLanguageForUser(phoneNumber string) string {
+	session := h.getOrCreateSMSSession(phoneNumber)
+	if session.Language != "" {
+		return session.Language
+	}
+	return h.LocalizationManager.GetPrimaryLanguage()
 }
