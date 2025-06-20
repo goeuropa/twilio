@@ -36,5 +36,14 @@
   "sms.keyword.invalid": "I don't understand '%s'. Send a stop ID or reply 'help' for usage info.",
   "sms.session.expired": "Session expired. Please send a stop ID to get started.",
   "sms.error.invalid_stop": "Please send a valid stop ID (e.g., 75403).",
-  "sms.error.search_failed": "Sorry, I couldn't search for stop %s. Please check the stop ID and try again."
+  "sms.error.search_failed": "Sorry, I couldn't search for stop %s. Please check the stop ID and try again.",
+  "error.api_timeout": "OneBusAway service is temporarily unavailable. Please try again in a moment.",
+  "error.invalid_stop_id": "Invalid stop ID. Please provide a valid stop ID.",
+  "error.stop_not_found": "Sorry, no stops found with ID %s. Please check and try again.",
+  "error.service_unavailable": "OneBusAway service is currently unavailable. Please try again later.",
+  "error.network_error": "Network connection error. Please check your connection and try again.",
+  "error.internal_error": "An internal error occurred. Please try again.",
+  "error.validation_failed": "Invalid input. Please check your request and try again.",
+  "error.general": "An unexpected error occurred. Please try again.",
+  "error.invalid_request": "Invalid request format. Please try again."
 }
