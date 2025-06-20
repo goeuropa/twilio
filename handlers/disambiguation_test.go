@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -449,12 +448,8 @@ func TestSessionStore_ProperCleanup(t *testing.T) {
 	err := store.SetDisambiguationSession("+14444444444", session)
 	assert.NoError(t, err)
 
-	// Manually expire the session by manipulating the internal state
-	store.mutex.Lock()
-	if storedSession, exists := store.sessions["+14444444444"]; exists {
-		storedSession.CreatedAt = time.Now().Unix() - (sessionTimeoutMinutes+1)*60
-	}
-	store.mutex.Unlock()
+	// Manually expire the session using the helper method
+	store.ExpireSession("+14444444444")
 
 	// Getting expired session should return nil and clean it up
 	retrieved := store.GetDisambiguationSession("+14444444444")

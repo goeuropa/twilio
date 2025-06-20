@@ -493,12 +493,8 @@ func TestSessionStore_VoiceSessionTimeout(t *testing.T) {
 	err := store.SetVoiceSession("+14444444444", session)
 	assert.NoError(t, err)
 
-	// Manually expire the session
-	store.mutex.Lock()
-	if storedSession, exists := store.voiceSessions["+14444444444"]; exists {
-		storedSession.CreatedAt = time.Now().Unix() - (sessionTimeoutMinutes+1)*60
-	}
-	store.mutex.Unlock()
+	// Manually expire the session using the helper method
+	store.ExpireSession("+14444444444")
 
 	// Getting expired session should return nil and clean it up
 	retrieved := store.GetVoiceSession("+14444444444")

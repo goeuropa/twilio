@@ -580,10 +580,8 @@ func TestSMSHandler_SessionTimeout(t *testing.T) {
 		LastQueryTime: time.Now().Unix(),
 		CreatedAt:     time.Now().Unix() - 16*60, // 16 minutes ago (expired)
 	}
-	// Manually insert expired session to bypass CreatedAt override in SetSMSSession
-	smsHandler.SessionStore.mutex.Lock()
-	smsHandler.SessionStore.smsSessions["+12345678901"] = session
-	smsHandler.SessionStore.mutex.Unlock()
+	// Manually insert expired session using helper method
+	smsHandler.SessionStore.SetExpiredSMSSession("+12345678901", session)
 
 	// Try to use "more" command with expired session
 	w := sendSMSRequest(r, "+12345678901", "more")
