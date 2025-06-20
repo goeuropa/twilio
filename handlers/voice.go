@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -21,6 +20,7 @@ type VoiceHandler struct {
 	SessionStore        *SessionStore
 	TemplateManager     *formatters.VoiceTemplateManager
 	LocalizationManager *localization.LocalizationManager
+	ErrorHandler        *ErrorHandler
 }
 
 func NewVoiceHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *VoiceHandler {
@@ -34,6 +34,7 @@ func NewVoiceHandler(obaClient client.OneBusAwayClientInterface, locManager *loc
 		SessionStore:        NewSessionStore(),
 		TemplateManager:     templateManager,
 		LocalizationManager: locManager,
+		ErrorHandler:        NewErrorHandler(locManager),
 	}
 }
 
@@ -46,25 +47,15 @@ func (h *VoiceHandler) Close() {
 func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 	var req models.TwilioVoiceRequest
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("Failed to bind voice request: %v", err)
-		c.Header("Content-Type", "text/xml")
 		language := h.getLanguageFromRequest(c)
-		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_request", language)
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: errorMsg,
-		})
-		c.String(http.StatusBadRequest, twiml)
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
 		return
 	}
 
 	// Validate phone number
 	if err := validation.ValidatePhoneNumber(req.From); err != nil {
-		log.Printf("Invalid phone number from %s: %v", req.From, err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid phone number format.",
-		})
-		c.String(http.StatusBadRequest, twiml)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
 		return
 	}
 
@@ -93,23 +84,15 @@ func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
 func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 	var req models.TwilioVoiceRequest
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("Failed to bind voice input request: %v", err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid request format.",
-		})
-		c.String(http.StatusBadRequest, twiml)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
 		return
 	}
 
 	// Validate phone number
 	if err := validation.ValidatePhoneNumber(req.From); err != nil {
-		log.Printf("Invalid phone number from %s: %v", req.From, err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid phone number format.",
-		})
-		c.String(http.StatusBadRequest, twiml)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
 		return
 	}
 
@@ -178,19 +161,8 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 	// Find all matching stops for the given ID
 	matchingStops, err := h.OBAClient.FindAllMatchingStops(stopID)
 	if err != nil {
-		log.Printf("Error finding matching stops for %s: %v", stopID, err)
-		var message string
-		if strings.Contains(err.Error(), "cannot be empty") {
-			message = "Please provide a valid stop ID."
-		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") {
-			message = "OneBusAway service is temporarily unavailable. Please try again in a moment."
-		} else {
-			message = fmt.Sprintf("Sorry, I couldn't search for stop %s. Please check the stop ID and try again.", stopID)
-		}
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: message,
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleVoiceError(c, err, language)
 		return
 	}
 
@@ -211,11 +183,8 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 			StopOptions: matchingStops,
 		}
 		if err := h.SessionStore.SetDisambiguationSession(req.From, session); err != nil {
-			log.Printf("Failed to store disambiguation session for %s: %v", req.From, err)
-			twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-				ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
-			})
-			c.String(http.StatusOK, twiml)
+			language := h.getLanguageFromRequest(c)
+			h.ErrorHandler.HandleInternalError(c, err, "voice", language)
 			return
 		}
 
@@ -241,12 +210,8 @@ func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
 func (h *VoiceHandler) HandleVoiceMenuAction(c *gin.Context) {
 	var req models.TwilioVoiceRequest
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("Failed to bind voice menu action request: %v", err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: "Invalid request format.",
-		})
-		c.String(http.StatusBadRequest, twiml)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
 		return
 	}
 
@@ -423,13 +388,8 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	obaResp, err = h.OBAClient.GetArrivalsAndDeparturesWithWindow(fullStopID, window)
 
 	if err != nil {
-		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
 		language := h.getLanguageFromRequest(c)
-		errorMsg := h.LocalizationManager.GetString("voice.error.service_unavailable", language)
-		twiml, _ := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: errorMsg,
-		})
-		c.String(http.StatusOK, twiml)
+		h.ErrorHandler.HandleVoiceError(c, err, language)
 		return
 	}
 

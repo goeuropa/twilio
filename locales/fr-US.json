@@ -24,7 +24,26 @@
   "sms.no_stops_found": "Désolé, aucun arrêt trouvé avec l'ID %s. Veuillez vérifier et réessayer.",
   "sms.no_arrivals": "Aucune arrivée prochaine trouvée pour cet arrêt.",
   "sms.service_unavailable": "Le service OneBusAway est temporairement indisponible. Veuillez réessayer.",
-  "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
-  "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",
-  "voice.error.invalid_choice": "Please press a number between 1 and %d."
+  "sms.error.invalid_choice": "Veuillez choisir un numéro entre 1 et %d.",
+  "voice.error.invalid_stop_id": "ID d'arrêt invalide. Veuillez réessayer avec un ID d'arrêt valide."
+  "voice.error.invalid_choice": "Veuillez appuyer sur un numéro entre 1 et %d."
+  "sms.help": "Envoyez un ID d'arrêt (ex. 75403) pour obtenir les arrivées. Répondez 'more' pour les bus suivants, 'help' pour ce message.",
+  "sms.menu.more_hint": "Répondez 'more' pour les bus suivants",
+  "sms.menu.new_hint": "Répondez 'new' pour un arrêt différent",
+  "sms.menu.help_hint": "Répondez 'help' pour l'aide",
+  "sms.language.switched": "Langue changée vers le français",
+  "sms.keyword.more": "Affichage des bus dans les %d prochaines minutes:",
+  "sms.keyword.invalid": "Je ne comprends pas '%s'. Envoyez un ID d'arrêt ou répondez 'help' pour l'aide.",
+  "sms.session.expired": "Session expirée. Veuillez envoyer un ID d'arrêt pour commencer.",
+  "sms.error.invalid_stop": "Veuillez envoyer un ID d'arrêt valide (ex. 75403).",
+  "sms.error.search_failed": "Désolé, je n'ai pas pu rechercher l'arrêt %s. Veuillez vérifier l'ID de l'arrêt et réessayer.",
+  "error.api_timeout": "Le service OneBusAway est temporairement indisponible. Veuillez réessayer dans un moment.",
+  "error.invalid_stop_id": "ID d'arrêt invalide. Veuillez fournir un ID d'arrêt valide.",
+  "error.stop_not_found": "Désolé, aucun arrêt trouvé avec l'ID %s. Veuillez vérifier et réessayer.",
+  "error.service_unavailable": "Le service OneBusAway est actuellement indisponible. Veuillez réessayer plus tard.",
+  "error.network_error": "Erreur de connexion réseau. Veuillez vérifier votre connexion et réessayer.",
+  "error.internal_error": "Une erreur interne s'est produite. Veuillez réessayer.",
+  "error.validation_failed": "Entrée invalide. Veuillez vérifier votre demande et réessayer.",
+  "error.general": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+  "error.invalid_request": "Format de demande invalide. Veuillez réessayer."
 }

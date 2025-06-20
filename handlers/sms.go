@@ -29,6 +29,7 @@ type SMSHandler struct {
 	OBAClient           client.OneBusAwayClientInterface
 	SessionStore        *SessionStore
 	LocalizationManager *localization.LocalizationManager
+	ErrorHandler        *ErrorHandler
 }
 
 func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *SMSHandler {
@@ -36,6 +37,7 @@ func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *local
 		OBAClient:           obaClient,
 		SessionStore:        NewSessionStore(),
 		LocalizationManager: locManager,
+		ErrorHandler:        NewErrorHandler(locManager),
 	}
 }
 
@@ -48,28 +50,19 @@ func (h *SMSHandler) Close() {
 func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	var req models.TwilioSMSRequest
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("Failed to bind SMS request: %v", err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := formatters.GenerateTwiMLSMS("Invalid request format.")
-		c.String(http.StatusBadRequest, twiml)
+		h.ErrorHandler.HandleValidationError(c, err, "sms", h.LocalizationManager.GetPrimaryLanguage())
 		return
 	}
 
 	// Validate phone number
 	if err := validation.ValidatePhoneNumber(req.From); err != nil {
-		log.Printf("Invalid phone number from %s: %v", req.From, err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := formatters.GenerateTwiMLSMS("Invalid phone number format.")
-		c.String(http.StatusBadRequest, twiml)
+		h.ErrorHandler.HandleValidationError(c, err, "sms", h.LocalizationManager.GetPrimaryLanguage())
 		return
 	}
 
 	// Validate and sanitize message body
 	if err := validation.ValidateMessageBody(req.Body); err != nil {
-		log.Printf("Invalid message body from %s: %v", req.From, err)
-		c.Header("Content-Type", "text/xml")
-		twiml, _ := formatters.GenerateTwiMLSMS("Message contains invalid content.")
-		c.String(http.StatusBadRequest, twiml)
+		h.ErrorHandler.HandleValidationError(c, err, "sms", h.LocalizationManager.GetPrimaryLanguage())
 		return
 	}
 
@@ -128,17 +121,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	// Find all matching stops for the given ID
 	matchingStops, err := h.OBAClient.FindAllMatchingStops(stopID)
 	if err != nil {
-		log.Printf("Error finding matching stops for %s: %v", stopID, err)
-		var message string
-		if strings.Contains(err.Error(), "cannot be empty") {
-			message = h.LocalizationManager.GetString("sms.error.invalid_stop", language)
-		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") {
-			message = h.LocalizationManager.GetString("sms.service_unavailable", language)
-		} else {
-			message = h.LocalizationManager.GetString("sms.error.search_failed", language, stopID)
-		}
-		twiml, _ := formatters.GenerateTwiMLSMS(message)
-		c.String(http.StatusOK, twiml)
+		h.ErrorHandler.HandleSMSError(c, err, language)
 		return
 	}
 
@@ -158,9 +141,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 			StopOptions: matchingStops,
 		}
 		if err := h.SessionStore.SetDisambiguationSession(req.From, session); err != nil {
-			log.Printf("Failed to store disambiguation session for %s: %v", req.From, err)
-			twiml, _ := formatters.GenerateTwiMLSMS("Sorry, there was an error processing your request. Please try again.")
-			c.String(http.StatusOK, twiml)
+			h.ErrorHandler.HandleInternalError(c, err, "sms", language)
 			return
 		}
 
@@ -215,10 +196,7 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		obaResp, err = h.OBAClient.GetArrivalsAndDeparturesWithWindow(fullStopID, window)
 	}
 	if err != nil {
-		log.Printf("OneBusAway API error for stop %s: %v", fullStopID, err)
-		errorMsg := h.LocalizationManager.GetString("sms.service_unavailable", session.Language)
-		twiml, _ := formatters.GenerateTwiMLSMS(errorMsg)
-		c.String(http.StatusOK, twiml)
+		h.ErrorHandler.HandleSMSError(c, err, session.Language)
 		return
 	}
 
@@ -250,9 +228,8 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 
 	twiml, err := formatters.GenerateTwiMLSMS(message)
 	if err != nil {
-		log.Printf("Failed to generate TwiML: %v", err)
-		errorMsg := h.LocalizationManager.GetString("sms.service_unavailable", session.Language)
-		twiml, _ = formatters.GenerateTwiMLSMS(errorMsg)
+		h.ErrorHandler.HandleInternalError(c, err, "sms", session.Language)
+		return
 	}
 
 	c.String(http.StatusOK, twiml)
