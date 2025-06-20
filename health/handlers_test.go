@@ -1,0 +1,530 @@
+package health
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+func setupTestHandler() (*Handler, *gin.Engine) {
+	gin.SetMode(gin.TestMode)
+
+	manager := NewManager(WithTimeout(1 * time.Second))
+	manager.AddChecker(&MockHealthChecker{
+		name: "test-checker",
+		result: CheckResult{
+			Status:  StatusHealthy,
+			Message: "Test is healthy",
+		},
+	})
+
+	handler := NewHandler(manager)
+	router := gin.New()
+	handler.SetupRoutes(router)
+
+	return handler, router
+}
+
+func TestHealthHandler(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response HealthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != StatusHealthy {
+		t.Errorf("Expected status healthy, got %s", response.Status)
+	}
+
+	if response.Checks == nil {
+		t.Error("Expected checks to be present")
+	}
+
+	// Check cache control headers
+	cacheControl := w.Header().Get("Cache-Control")
+	if cacheControl != "no-cache, no-store, must-revalidate" {
+		t.Errorf("Expected no-cache header, got %s", cacheControl)
+	}
+}
+
+func TestReadinessHandler(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health/ready", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response HealthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != StatusHealthy {
+		t.Errorf("Expected status healthy, got %s", response.Status)
+	}
+}
+
+func TestDetailedHandler(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health/detailed", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response HealthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != StatusHealthy {
+		t.Errorf("Expected status healthy, got %s", response.Status)
+	}
+
+	if response.SystemInfo == nil {
+		t.Error("Expected system info to be present in detailed response")
+	}
+}
+
+func TestMetricsHandler_JSON(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/metrics", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected JSON content type, got %s", contentType)
+	}
+
+	var metrics MetricsInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &metrics); err != nil {
+		t.Fatalf("Failed to unmarshal metrics: %v", err)
+	}
+}
+
+func TestMetricsHandler_Prometheus(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	expectedContentType := "text/plain; version=0.0.4; charset=utf-8"
+	if contentType != expectedContentType {
+		t.Errorf("Expected Prometheus content type %s, got %s", expectedContentType, contentType)
+	}
+
+	body := w.Body.String()
+	if body == "" {
+		t.Error("Expected non-empty Prometheus metrics")
+	}
+
+	// Check for expected Prometheus metric format
+	if !contains(body, "# HELP") {
+		t.Error("Expected Prometheus HELP comments")
+	}
+
+	if !contains(body, "# TYPE") {
+		t.Error("Expected Prometheus TYPE comments")
+	}
+}
+
+func TestStatsHandler(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response["status"] != "ok" {
+		t.Errorf("Expected status 'ok', got %v", response["status"])
+	}
+
+	if response["stats"] == nil {
+		t.Error("Expected stats to be present")
+	}
+}
+
+func TestConfigHandler(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health/config", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &config); err != nil {
+		t.Fatalf("Failed to unmarshal config: %v", err)
+	}
+
+	expectedKeys := []string{"timeout", "cache_ttl", "max_concurrent_checks", "registered_checkers"}
+	for _, key := range expectedKeys {
+		if config[key] == nil {
+			t.Errorf("Expected config key %s to be present", key)
+		}
+	}
+}
+
+func TestCacheHandler_GET(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("GET", "/health/cache", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response["cache_size"] == nil {
+		t.Error("Expected cache_size in response")
+	}
+
+	if response["cache_ttl"] == nil {
+		t.Error("Expected cache_ttl in response")
+	}
+}
+
+func TestCacheHandler_DELETE(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("DELETE", "/health/cache", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response["status"] != "ok" {
+		t.Errorf("Expected status 'ok', got %v", response["status"])
+	}
+
+	if response["message"] == nil {
+		t.Error("Expected message in response")
+	}
+}
+
+func TestCacheHandler_InvalidMethod(t *testing.T) {
+	_, router := setupTestHandler()
+
+	req, _ := http.NewRequest("POST", "/health/cache", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// POST method returns 404 because no route is registered for it
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", w.Code)
+	}
+}
+
+func TestHealthHandler_UnhealthyStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := NewManager()
+	manager.AddChecker(&MockHealthChecker{
+		name: "unhealthy-checker",
+		result: CheckResult{
+			Status: StatusUnhealthy,
+			Error:  "Something is broken",
+		},
+	})
+
+	handler := NewHandler(manager)
+	router := gin.New()
+	handler.SetupRoutes(router)
+
+	req, _ := http.NewRequest("GET", "/health/ready", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status 503 for unhealthy service, got %d", w.Code)
+	}
+
+	var response HealthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != StatusUnhealthy {
+		t.Errorf("Expected status unhealthy, got %s", response.Status)
+	}
+}
+
+func TestHealthHandler_DegradedStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	manager := NewManager()
+	manager.AddChecker(&MockHealthChecker{
+		name: "degraded-checker",
+		result: CheckResult{
+			Status:  StatusDegraded,
+			Message: "Performance is degraded",
+		},
+	})
+
+	handler := NewHandler(manager)
+	router := gin.New()
+	handler.SetupRoutes(router)
+
+	req, _ := http.NewRequest("GET", "/health/ready", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Degraded should still return 200 for liveness checks
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200 for degraded liveness check, got %d", w.Code)
+	}
+
+	var response HealthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != StatusDegraded {
+		t.Errorf("Expected status degraded, got %s", response.Status)
+	}
+}
+
+func TestSimpleHealthHandler(t *testing.T) {
+	handler, _ := setupTestHandler()
+
+	router := gin.New()
+	router.GET("/health", handler.SimpleHealthHandler)
+
+	req, _ := http.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response HealthCheckResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response.Status != "ok" {
+		t.Errorf("Expected status 'ok', got %s", response.Status)
+	}
+
+	if response.Uptime == "" {
+		t.Error("Expected uptime to be present")
+	}
+}
+
+func TestPingHandler(t *testing.T) {
+	handler, _ := setupTestHandler()
+
+	router := gin.New()
+	router.GET("/ping", handler.PingHandler)
+
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if body != "pong" {
+		t.Errorf("Expected 'pong', got %s", body)
+	}
+}
+
+func TestHealthMiddleware(t *testing.T) {
+	handler, _ := setupTestHandler()
+
+	router := gin.New()
+	router.Use(handler.HealthMiddleware())
+	router.GET("/test", func(c *gin.Context) {
+		time.Sleep(50 * time.Millisecond) // Simulate some work
+		c.String(200, "ok")
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	// The middleware should not interfere with the response
+	body := w.Body.String()
+	if body != "ok" {
+		t.Errorf("Expected 'ok', got %s", body)
+	}
+}
+
+func TestHealthResponseMiddleware(t *testing.T) {
+	handler, _ := setupTestHandler()
+
+	router := gin.New()
+	router.Use(handler.HealthResponseMiddleware())
+	router.GET("/test", func(c *gin.Context) {
+		c.String(200, "test response")
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if body != "test response" {
+		t.Errorf("Expected 'test response', got %s", body)
+	}
+}
+
+func TestSetupMinimalRoutes(t *testing.T) {
+	handler, _ := setupTestHandler()
+
+	router := gin.New()
+	handler.SetupMinimalRoutes(router)
+
+	// Test /health endpoint
+	req, _ := http.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200 for /health, got %d", w.Code)
+	}
+
+	// Test /ping endpoint
+	req, _ = http.NewRequest("GET", "/ping", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200 for /ping, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if body != "pong" {
+		t.Errorf("Expected 'pong', got %s", body)
+	}
+}
+
+func TestResponseHeaders(t *testing.T) {
+	_, router := setupTestHandler()
+
+	endpoints := []string{"/health", "/health/ready", "/health/detailed", "/health/stats", "/health/config"}
+
+	for _, endpoint := range endpoints {
+		req, _ := http.NewRequest("GET", endpoint, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Check cache control headers
+		cacheControl := w.Header().Get("Cache-Control")
+		if cacheControl != "no-cache, no-store, must-revalidate" {
+			t.Errorf("Endpoint %s: expected no-cache header, got %s", endpoint, cacheControl)
+		}
+
+		// Check content type
+		contentType := w.Header().Get("Content-Type")
+		if contentType != "application/json" {
+			t.Errorf("Endpoint %s: expected JSON content type, got %s", endpoint, contentType)
+		}
+	}
+}
+
+func TestConcurrentHealthRequests(t *testing.T) {
+	_, router := setupTestHandler()
+
+	// Test concurrent requests to health endpoint
+	const numRequests = 10
+	done := make(chan bool, numRequests)
+
+	for i := 0; i < numRequests; i++ {
+		go func() {
+			req, _ := http.NewRequest("GET", "/health", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("Expected status 200, got %d", w.Code)
+			}
+
+			done <- true
+		}()
+	}
+
+	// Wait for all requests to complete
+	for i := 0; i < numRequests; i++ {
+		<-done
+	}
+}
+
+// Helper function to check if string contains substring
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

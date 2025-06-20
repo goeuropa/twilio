@@ -223,7 +223,7 @@ func (s *ImprovedSessionStore) validateSession(phoneNumber string, entry *Sessio
 		return false
 	}
 
-	// Performance optimization: check expiration first since it's the most common 
+	// Performance optimization: check expiration first since it's the most common
 	// failure case and avoids the expensive checksum calculation
 	if now-entry.createdAt > timeout {
 		return false // Session expired
@@ -416,7 +416,7 @@ func (s *ImprovedSessionStore) GetSessionCountAccurate() int {
 func (s *ImprovedSessionStore) GetMetrics() *SessionMetrics {
 	// Use atomic counter for performance, with occasional sync for accuracy
 	totalSessions := atomic.LoadInt64(&s.metrics.totalSessions)
-	
+
 	// Periodically sync the atomic counter with actual map size
 	// This helps catch any potential drift between atomic counter and actual sessions
 	if totalSessions%1000 == 0 {
