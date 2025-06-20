@@ -302,6 +302,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(&mockStopOptions[0], nil)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")

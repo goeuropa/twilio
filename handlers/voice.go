@@ -379,7 +379,15 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
-	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME // obaResp.Data.Entry.Stop.Name
+
+	// Get the human-readable stop name instead of using the technical stop ID
+	stopName := ""
+	if stopInfo, err := h.OBAClient.GetStopInfo(fullStopID); err == nil && stopInfo != nil {
+		stopName = stopInfo.StopName
+	} else {
+		// Fall back to stop ID if we can't get the stop name
+		stopName = obaResp.Data.Entry.StopId
+	}
 
 	language := h.getLanguageFromRequest(c)
 	message := formatters.FormatVoiceResponse(arrivals, stopName, h.LocalizationManager, language)

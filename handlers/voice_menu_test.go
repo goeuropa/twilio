@@ -178,6 +178,7 @@ func TestVoiceHandler_FindStopWithMenuOptions(t *testing.T) {
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(&mockStopOptions[0], nil)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -263,6 +264,11 @@ func TestVoiceHandler_MenuActionExtendDepartures(t *testing.T) {
 	// Should call with extended window (30 minutes)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
+		FullStopID: "1_12345",
+		StopName:   "Test Stop",
+		AgencyName: "Test Agency",
+	}, nil)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -426,6 +432,11 @@ func TestVoiceHandler_ExtendedDeparturesMultipleTimes(t *testing.T) {
 	// Should call with further extended window (60 + 30 = 90 minutes)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
+		FullStopID: "1_12345",
+		StopName:   "Test Stop",
+		AgencyName: "Test Agency",
+	}, nil)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -523,6 +534,11 @@ func TestVoiceHandler_MenuActionWithQueryParameter(t *testing.T) {
 	// Should use the query parameter value (90) instead of session value + 30
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
+		FullStopID: "1_12345",
+		StopName:   "Test Stop",
+		AgencyName: "Test Agency",
+	}, nil)
 
 	r := gin.New()
 	r.POST("/voice/menu_action", voiceHandler.HandleVoiceMenuAction)
@@ -590,5 +606,194 @@ func TestVoiceHandler_MenuActionMissingQueryParameter(t *testing.T) {
 	assert.Equal(t, 30, session.MinutesAfter) // Should still be original value
 
 	// No API calls should have been made
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_StopNameRetrievalInResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	mockClient := new(MockOneBusAwayClientVoiceMenu)
+	lm := localization.NewTestManager()
+	voiceHandler := NewVoiceHandler(mockClient, lm)
+
+	r.POST("/voice/find_stop", voiceHandler.HandleFindStop)
+
+	// Mock the arrivals response
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				ArrivalsAndDepartures: []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				}{
+					{
+						RouteShortName: "8",
+						TripHeadsign:   "Downtown",
+						Status:         "scheduled",
+					},
+				},
+				StopId: "1_12345",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	// Mock the stop info response with proper stop name
+	mockStopInfo := &models.StopOption{
+		FullStopID: "1_12345",
+		StopName:   "Pine St & 5th Ave",
+		AgencyName: "Metro Transit",
+	}
+
+	// Mock the matching stops response (single stop found)
+	mockMatchingStops := []models.StopOption{*mockStopInfo}
+
+	// Set up expectations
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockMatchingStops, nil)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(mockStopInfo, nil)
+
+	form := url.Values{}
+	form.Set("From", "+15555555555")
+	form.Set("Digits", "12345")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// Verify that the response contains the stop name, not the stop ID
+	assert.Contains(t, body, "Pine St & 5th Ave", "Response should contain human-readable stop name")
+	assert.NotContains(t, body, "1_12345", "Response should not contain technical stop ID")
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_StopNameRetrievalFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	mockClient := new(MockOneBusAwayClientVoiceMenu)
+	lm := localization.NewTestManager()
+	voiceHandler := NewVoiceHandler(mockClient, lm)
+
+	r.POST("/voice/find_stop", voiceHandler.HandleFindStop)
+
+	// Mock the arrivals response
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				ArrivalsAndDepartures: []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				}{
+					{
+						RouteShortName: "8",
+						TripHeadsign:   "Downtown",
+						Status:         "scheduled",
+					},
+				},
+				StopId: "1_12345",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	// Mock matching stops response (single stop found)
+	mockStopInfo := &models.StopOption{
+		FullStopID: "1_12345",
+		StopName:   "Pine St & 5th Ave",
+		AgencyName: "Metro Transit",
+	}
+	mockMatchingStops := []models.StopOption{*mockStopInfo}
+
+	// Set up expectations - GetStopInfo fails
+	mockClient.On("FindAllMatchingStops", "12345").Return(mockMatchingStops, nil)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_12345").Return(nil, fmt.Errorf("stop not found"))
+
+	form := url.Values{}
+	form.Set("From", "+15555555555")
+	form.Set("Digits", "12345")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+
+	// When GetStopInfo fails, should fall back to using the stop ID
+	assert.Contains(t, body, "1_12345", "Response should contain stop ID as fallback when stop name retrieval fails")
+
 	mockClient.AssertExpectations(t)
 }
