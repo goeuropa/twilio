@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say>{{.ArrivalsMessage}}</Say>
-    <Gather numDigits="1" action="/voice/menu_action?minutesAfter={{if eq .MinutesAfter 0}}60{{else}}{{add .MinutesAfter 30}}{{end}}{{if .Language}}&lang={{.Language}}{{end}}" method="POST">
+    <Gather numDigits="1" action="/voice/menu_action?minutesAfter={{if eq .MinutesAfter 0}}60{{else}}{{add .MinutesAfter 30}}{{end}}{{if .Language}}&amp;lang={{.Language}}{{end}}" method="POST">
         <Say>{{.MenuPrompt}}</Say>
     </Gather>
 </Response>
