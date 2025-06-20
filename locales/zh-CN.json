@@ -15,6 +15,12 @@
   "voice.time.now": "现在",
   "voice.time.minutes": "%d分钟",
   "voice.time.minute": "1分钟",
+  "voice.arrival.arriving_now": "即将到达",
+  "voice.arrival.in_one_minute": "1分钟后",
+  "voice.arrival.in_minutes": "%d分钟后",
+  "voice.arrival.route_to": "%s路开往%s",
+  "voice.arrival.arrivals_for": "%s的到达信息。",
+  "voice.arrival.no_arrivals": "该站点没有即将到达的班次。",
   "sms.no_stops_found": "抱歉，找不到ID为%s的站点。请检查后重试。",
   "sms.no_arrivals": "该站点没有即将到达的班次。",
   "sms.service_unavailable": "OneBusAway服务暂时不可用。请重试。"

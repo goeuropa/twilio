@@ -381,7 +381,8 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
 	stopName := obaResp.Data.Entry.StopId // ABXOXO: FIXME // obaResp.Data.Entry.Stop.Name
 
-	message := formatters.FormatVoiceResponse(arrivals, stopName)
+	language := h.getLanguageFromRequest(c)
+	message := formatters.FormatVoiceResponse(arrivals, stopName, h.LocalizationManager, language)
 
 	// Set up voice session for menu options
 	session := &models.VoiceSession{
@@ -391,8 +392,6 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	if err := h.SessionStore.SetVoiceSession(phoneNumber, session); err != nil {
 		log.Printf("Failed to set voice session for %s: %v", phoneNumber, err)
 	}
-
-	language := h.getLanguageFromRequest(c)
 	menuPrompt := h.LocalizationManager.GetString("voice.menu.more_departures", language) + " " + h.LocalizationManager.GetString("voice.menu.main_menu", language)
 
 	twiml, err := h.TemplateManager.RenderVoiceFindStop(formatters.VoiceFindStopContext{

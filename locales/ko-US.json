@@ -15,6 +15,12 @@
   "voice.time.now": "지금",
   "voice.time.minutes": "%d분",
   "voice.time.minute": "1분",
+  "voice.arrival.arriving_now": "지금 도착",
+  "voice.arrival.in_one_minute": "1분 후",
+  "voice.arrival.in_minutes": "%d분 후",
+  "voice.arrival.route_to": "%s번 %s행",
+  "voice.arrival.arrivals_for": "%s 도착 정보.",
+  "voice.arrival.no_arrivals": "이 정류장에 예정된 도착 정보가 없습니다.",
   "sms.no_stops_found": "죄송합니다. ID %s로 정류장을 찾을 수 없습니다. 확인 후 다시 시도해 주세요.",
   "sms.no_arrivals": "이 정류장에 예정된 도착 정보가 없습니다.",
   "sms.service_unavailable": "OneBusAway 서비스가 일시적으로 사용할 수 없습니다. 다시 시도해 주세요."

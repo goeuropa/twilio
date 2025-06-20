@@ -15,6 +15,12 @@
   "voice.time.now": "Teraz",
   "voice.time.minutes": "%d min",
   "voice.time.minute": "1 min",
+  "voice.arrival.arriving_now": "przyjeżdża teraz",
+  "voice.arrival.in_one_minute": "za 1 minutę",
+  "voice.arrival.in_minutes": "za %d minut",
+  "voice.arrival.route_to": "Linia %s do %s",
+  "voice.arrival.arrivals_for": "Przyjazdy dla %s.",
+  "voice.arrival.no_arrivals": "Nie znaleziono nadchodzących przyjazdów dla tego przystanku.",
   "sms.no_stops_found": "Przepraszam, nie znaleziono przystanków z ID %s. Proszę sprawdzić i spróbować ponownie.",
   "sms.no_arrivals": "Nie znaleziono nadchodzących przyjazdów dla tego przystanku.",
   "sms.service_unavailable": "Usługa OneBusAway jest tymczasowo niedostępna. Proszę spróbować ponownie."

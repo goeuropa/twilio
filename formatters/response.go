@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
@@ -34,27 +35,69 @@ func FormatSMSResponse(arrivals []models.Arrival, stopName string) string {
 	return strings.TrimSpace(response.String())
 }
 
-func FormatVoiceResponse(arrivals []models.Arrival, stopName string) string {
+// RouteGroup represents arrivals grouped by route and headsign
+type RouteGroup struct {
+	RouteShortName string
+	TripHeadsign   string
+	ArrivalTimes   []int
+}
+
+// groupArrivalsByRoute groups arrivals by route short name and headsign
+func groupArrivalsByRoute(arrivals []models.Arrival) []RouteGroup {
+	groups := make(map[string]*RouteGroup)
+	var groupOrder []string
+
+	for _, arrival := range arrivals {
+		key := arrival.RouteShortName + "|" + arrival.TripHeadsign
+		if group, exists := groups[key]; exists {
+			group.ArrivalTimes = append(group.ArrivalTimes, arrival.MinutesUntilArrival)
+		} else {
+			groups[key] = &RouteGroup{
+				RouteShortName: arrival.RouteShortName,
+				TripHeadsign:   arrival.TripHeadsign,
+				ArrivalTimes:   []int{arrival.MinutesUntilArrival},
+			}
+			groupOrder = append(groupOrder, key)
+		}
+	}
+
+	result := make([]RouteGroup, len(groupOrder))
+	for i, key := range groupOrder {
+		result[i] = *groups[key]
+	}
+	return result
+}
+
+func FormatVoiceResponse(arrivals []models.Arrival, stopName string, lm *localization.LocalizationManager, language string) string {
 	if len(arrivals) == 0 {
-		return "No upcoming arrivals found for this stop."
+		return lm.GetString("voice.arrival.no_arrivals", language)
 	}
 
 	var response strings.Builder
 
 	if stopName != "" {
-		response.WriteString(fmt.Sprintf("Arrivals for %s. ", stopName))
+		response.WriteString(lm.GetString("voice.arrival.arrivals_for", language, stopName))
+		response.WriteString(" ")
 	}
 
-	for i, arrival := range arrivals {
-		if i >= 3 {
-			break
-		}
+	// Group arrivals by route
+	routeGroups := groupArrivalsByRoute(arrivals)
 
-		timeText := formatArrivalTimeVoice(arrival.MinutesUntilArrival)
-		response.WriteString(fmt.Sprintf("Route %s to %s %s. ",
-			arrival.RouteShortName,
-			arrival.TripHeadsign,
-			timeText))
+	for _, group := range routeGroups {
+		// Format "Route X to Y"
+		routeText := lm.GetString("voice.arrival.route_to", language, group.RouteShortName, group.TripHeadsign)
+		response.WriteString(routeText)
+		response.WriteString(" ")
+
+		// Format the arrival times
+		for i, minutes := range group.ArrivalTimes {
+			if i > 0 {
+				response.WriteString(", ")
+			}
+			timeText := formatArrivalTimeVoiceLocalized(minutes, lm, language)
+			response.WriteString(timeText)
+		}
+		response.WriteString(". ")
 	}
 
 	return response.String()
@@ -95,6 +138,16 @@ func formatArrivalTimeVoice(minutes int) string {
 		return "in 1 minute"
 	} else {
 		return fmt.Sprintf("in %d minutes", minutes)
+	}
+}
+
+func formatArrivalTimeVoiceLocalized(minutes int, lm *localization.LocalizationManager, language string) string {
+	if minutes <= 0 {
+		return lm.GetString("voice.arrival.arriving_now", language)
+	} else if minutes == 1 {
+		return lm.GetString("voice.arrival.in_one_minute", language)
+	} else {
+		return lm.GetString("voice.arrival.in_minutes", language, minutes)
 	}
 }
 

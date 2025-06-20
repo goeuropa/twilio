@@ -15,6 +15,12 @@
   "voice.time.now": "الآن",
   "voice.time.minutes": "%d دقيقة",
   "voice.time.minute": "دقيقة واحدة",
+  "voice.arrival.arriving_now": "يصل الآن",
+  "voice.arrival.in_one_minute": "خلال دقيقة واحدة",
+  "voice.arrival.in_minutes": "خلال %d دقائق",
+  "voice.arrival.route_to": "الخط %s إلى %s",
+  "voice.arrival.arrivals_for": "الوصولات لـ %s.",
+  "voice.arrival.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
   "sms.no_stops_found": "عذرا، لم يتم العثور على محطات برقم %s. يرجى التحقق والمحاولة مرة أخرى.",
   "sms.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
   "sms.service_unavailable": "خدمة OneBusAway غير متاحة مؤقتا. يرجى المحاولة مرة أخرى."

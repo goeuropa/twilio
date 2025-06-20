@@ -15,6 +15,12 @@
   "voice.time.now": "Jetzt",
   "voice.time.minutes": "%d Min",
   "voice.time.minute": "1 Min",
+  "voice.arrival.arriving_now": "kommt jetzt an",
+  "voice.arrival.in_one_minute": "in 1 Minute",
+  "voice.arrival.in_minutes": "in %d Minuten",
+  "voice.arrival.route_to": "Linie %s nach %s",
+  "voice.arrival.arrivals_for": "Ankünfte für %s.",
+  "voice.arrival.no_arrivals": "Keine bevorstehenden Ankünfte für diese Haltestelle gefunden.",
   "sms.no_stops_found": "Entschuldigung, keine Haltestellen mit ID %s gefunden. Bitte überprüfen und erneut versuchen.",
   "sms.no_arrivals": "Keine bevorstehenden Ankünfte für diese Haltestelle gefunden.",
   "sms.service_unavailable": "OneBusAway-Service ist vorübergehend nicht verfügbar. Bitte erneut versuchen."

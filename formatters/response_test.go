@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
@@ -51,24 +52,94 @@ func TestFormatSMSResponse_Empty(t *testing.T) {
 }
 
 func TestFormatVoiceResponse(t *testing.T) {
-	arrivals := []models.Arrival{
-		{
-			RouteShortName:      "8",
-			TripHeadsign:        "Seattle Center",
-			MinutesUntilArrival: 3,
-		},
-		{
-			RouteShortName:      "43",
-			TripHeadsign:        "Capitol Hill",
-			MinutesUntilArrival: 1,
-		},
-	}
+	// Create test localization manager
+	lm := localization.NewTestManager()
 
-	result := FormatVoiceResponse(arrivals, "Pine St & 3rd Ave")
+	t.Run("Different routes", func(t *testing.T) {
+		arrivals := []models.Arrival{
+			{
+				RouteShortName:      "8",
+				TripHeadsign:        "Seattle Center",
+				MinutesUntilArrival: 3,
+			},
+			{
+				RouteShortName:      "43",
+				TripHeadsign:        "Capitol Hill",
+				MinutesUntilArrival: 1,
+			},
+		}
 
-	assert.Contains(t, result, "Arrivals for Pine St & 3rd Ave")
-	assert.Contains(t, result, "Route 8 to Seattle Center in 3 minutes")
-	assert.Contains(t, result, "Route 43 to Capitol Hill in 1 minute")
+		result := FormatVoiceResponse(arrivals, "Pine St & 3rd Ave", lm, "en-US")
+
+		assert.Contains(t, result, "Arrivals for Pine St & 3rd Ave")
+		assert.Contains(t, result, "Route 8 to Seattle Center in 3 minutes")
+		assert.Contains(t, result, "Route 43 to Capitol Hill in 1 minute")
+	})
+
+	t.Run("Same route multiple times", func(t *testing.T) {
+		arrivals := []models.Arrival{
+			{
+				RouteShortName:      "128",
+				TripHeadsign:        "Admiral District",
+				MinutesUntilArrival: 2,
+			},
+			{
+				RouteShortName:      "128",
+				TripHeadsign:        "Admiral District",
+				MinutesUntilArrival: 12,
+			},
+			{
+				RouteShortName:      "512",
+				TripHeadsign:        "Everett Station",
+				MinutesUntilArrival: 8,
+			},
+			{
+				RouteShortName:      "512",
+				TripHeadsign:        "Everett Station",
+				MinutesUntilArrival: 18,
+			},
+		}
+
+		result := FormatVoiceResponse(arrivals, "Northgate TC", lm, "en-US")
+
+		// Should group identical routes together
+		assert.Contains(t, result, "Route 128 to Admiral District in 2 minutes, in 12 minutes")
+		assert.Contains(t, result, "Route 512 to Everett Station in 8 minutes, in 18 minutes")
+
+		// Should NOT have repeated route names
+		assert.Equal(t, 1, strings.Count(result, "Route 128"))
+		assert.Equal(t, 1, strings.Count(result, "Route 512"))
+	})
+
+	t.Run("Mixed routes and times", func(t *testing.T) {
+		arrivals := []models.Arrival{
+			{
+				RouteShortName:      "8",
+				TripHeadsign:        "Seattle Center",
+				MinutesUntilArrival: 0,
+			},
+			{
+				RouteShortName:      "8",
+				TripHeadsign:        "Seattle Center",
+				MinutesUntilArrival: 15,
+			},
+			{
+				RouteShortName:      "43",
+				TripHeadsign:        "Capitol Hill",
+				MinutesUntilArrival: 1,
+			},
+		}
+
+		result := FormatVoiceResponse(arrivals, "Test Stop", lm, "en-US")
+
+		assert.Contains(t, result, "Route 8 to Seattle Center arriving now, in 15 minutes")
+		assert.Contains(t, result, "Route 43 to Capitol Hill in 1 minute")
+	})
+
+	t.Run("Empty arrivals", func(t *testing.T) {
+		result := FormatVoiceResponse([]models.Arrival{}, "Test Stop", lm, "en-US")
+		assert.Equal(t, "No upcoming arrivals found for this stop.", result)
+	})
 }
 
 func TestGenerateTwiMLSMS(t *testing.T) {
@@ -168,6 +239,50 @@ func TestIsDisambiguationChoice(t *testing.T) {
 		result := IsDisambiguationChoice(tt.input)
 		assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
 	}
+}
+
+func TestGroupArrivalsByRoute(t *testing.T) {
+	arrivals := []models.Arrival{
+		{
+			RouteShortName:      "128",
+			TripHeadsign:        "Admiral District",
+			MinutesUntilArrival: 2,
+		},
+		{
+			RouteShortName:      "128",
+			TripHeadsign:        "Admiral District",
+			MinutesUntilArrival: 12,
+		},
+		{
+			RouteShortName:      "512",
+			TripHeadsign:        "Everett Station",
+			MinutesUntilArrival: 8,
+		},
+		{
+			RouteShortName:      "128",
+			TripHeadsign:        "Admiral District",
+			MinutesUntilArrival: 22,
+		},
+		{
+			RouteShortName:      "512",
+			TripHeadsign:        "Everett Station",
+			MinutesUntilArrival: 18,
+		},
+	}
+
+	groups := groupArrivalsByRoute(arrivals)
+
+	assert.Len(t, groups, 2)
+
+	// First group should be Route 128
+	assert.Equal(t, "128", groups[0].RouteShortName)
+	assert.Equal(t, "Admiral District", groups[0].TripHeadsign)
+	assert.Equal(t, []int{2, 12, 22}, groups[0].ArrivalTimes)
+
+	// Second group should be Route 512
+	assert.Equal(t, "512", groups[1].RouteShortName)
+	assert.Equal(t, "Everett Station", groups[1].TripHeadsign)
+	assert.Equal(t, []int{8, 18}, groups[1].ArrivalTimes)
 }
 
 func TestFormatDisambiguationMessage(t *testing.T) {
