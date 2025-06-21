@@ -13,6 +13,7 @@ import (
 
 	"oba-twilio/client"
 	"oba-twilio/formatters"
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
 	"oba-twilio/middleware"
 	"oba-twilio/models"
@@ -28,9 +29,9 @@ var (
 
 type SMSHandler struct {
 	OBAClient           client.OneBusAwayClientInterface
-	SessionStore        *SessionStore
+	SessionStore        *common.SessionStore
 	LocalizationManager *localization.LocalizationManager
-	ErrorHandler        *ErrorHandler
+	ErrorHandler        *common.ErrorHandler
 	analyticsManager    middleware.AnalyticsManager
 	analyticsHashSalt   string
 }
@@ -38,9 +39,9 @@ type SMSHandler struct {
 func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *SMSHandler {
 	return &SMSHandler{
 		OBAClient:           obaClient,
-		SessionStore:        NewSessionStore(),
+		SessionStore:        common.NewSessionStore(),
 		LocalizationManager: locManager,
-		ErrorHandler:        NewErrorHandler(locManager),
+		ErrorHandler:        common.NewErrorHandler(locManager),
 	}
 }
 
@@ -479,9 +480,6 @@ func (h *SMSHandler) getLanguageForUser(phoneNumber string) string {
 func SetAnalyticsManager(handler interface{}, manager middleware.AnalyticsManager, hashSalt string) {
 	switch h := handler.(type) {
 	case *SMSHandler:
-		h.analyticsManager = manager
-		h.analyticsHashSalt = hashSalt
-	case *VoiceHandler:
 		h.analyticsManager = manager
 		h.analyticsHashSalt = hashSalt
 	}

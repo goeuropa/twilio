@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
 	"oba-twilio/models"
 )
@@ -458,7 +459,7 @@ func TestVoiceHandler_ExtendedDeparturesMultipleTimes(t *testing.T) {
 }
 
 func TestSessionStore_VoiceSessionManagement(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.VoiceSession{
@@ -481,13 +482,13 @@ func TestSessionStore_VoiceSessionManagement(t *testing.T) {
 }
 
 func TestSessionStore_VoiceSessionTimeout(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.VoiceSession{
 		StopID:       "1_12345",
 		MinutesAfter: 30,
-		CreatedAt:    time.Now().Unix() - (sessionTimeoutMinutes+1)*60, // Expired
+		CreatedAt:    time.Now().Unix() - (common.SessionTimeoutMinutes+1)*60, // Expired
 	}
 
 	err := store.SetVoiceSession("+14444444444", session)

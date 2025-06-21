@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
-
 	"oba-twilio/models"
 )
 
@@ -354,7 +354,7 @@ func TestSMSHandler_DisambiguationChoice_NoSession(t *testing.T) {
 }
 
 func TestSessionStore_SetAndGet(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.DisambiguationSession{
@@ -373,7 +373,7 @@ func TestSessionStore_SetAndGet(t *testing.T) {
 }
 
 func TestSessionStore_Clear(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.DisambiguationSession{
@@ -391,7 +391,7 @@ func TestSessionStore_Clear(t *testing.T) {
 }
 
 func TestSessionStore_ConcurrentAccess(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.DisambiguationSession{
@@ -436,7 +436,7 @@ func TestSessionStore_ConcurrentAccess(t *testing.T) {
 }
 
 func TestSessionStore_ProperCleanup(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 
 	// Add a session that should be cleaned up - we'll manipulate it after setting
 	session := &models.DisambiguationSession{
@@ -459,7 +459,7 @@ func TestSessionStore_ProperCleanup(t *testing.T) {
 }
 
 func TestSessionStore_PhoneNumberValidation(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	session := &models.DisambiguationSession{
@@ -499,7 +499,7 @@ func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 }
 
 func TestSessionStore_GetWithInvalidPhoneNumber(t *testing.T) {
-	store := NewSessionStore()
+	store := common.NewSessionStore()
 	defer store.Close()
 
 	tests := []struct {

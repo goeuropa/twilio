@@ -9,13 +9,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
 	"oba-twilio/models"
 )
 
 func TestNewErrorHandler(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	assert.NotNil(t, errorHandler)
 	assert.Equal(t, locManager, errorHandler.LocalizationManager)
@@ -23,7 +24,7 @@ func TestNewErrorHandler(t *testing.T) {
 
 func TestMapAppErrorToUserMessage(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name         string
@@ -113,7 +114,7 @@ func TestMapAppErrorToUserMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key, args := errorHandler.mapAppErrorToUserMessage(tt.appError, tt.language)
+			key, args := errorHandler.MapAppErrorToUserMessage(tt.appError, tt.language)
 			assert.Equal(t, tt.expectedKey, key)
 			assert.Equal(t, tt.expectedArgs, args)
 		})
@@ -150,7 +151,7 @@ func TestExtractStopIDFromError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractStopIDFromError(tt.details)
+			result := common.ExtractStopIDFromError(tt.details)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -159,7 +160,7 @@ func TestExtractStopIDFromError(t *testing.T) {
 func TestHandleSMSError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name           string
@@ -223,7 +224,7 @@ func TestHandleSMSError(t *testing.T) {
 func TestHandleVoiceError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name           string
@@ -280,7 +281,7 @@ func TestHandleVoiceError(t *testing.T) {
 func TestHandleValidationError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name           string
@@ -328,7 +329,7 @@ func TestHandleValidationError(t *testing.T) {
 func TestHandleInternalError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name           string
@@ -368,7 +369,7 @@ func TestHandleInternalError(t *testing.T) {
 
 func TestGetLocalizedErrorMessage(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name           string
@@ -445,7 +446,7 @@ func TestGetLocalizedErrorMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := errorHandler.getLocalizedErrorMessage(tt.err, tt.language, tt.channel)
+			result := errorHandler.GetLocalizedErrorMessage(tt.err, tt.language, tt.channel)
 			assert.Contains(t, result, tt.expectedString)
 		})
 	}
@@ -453,7 +454,7 @@ func TestGetLocalizedErrorMessage(t *testing.T) {
 
 func TestIsRetryableError(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name      string
@@ -513,7 +514,7 @@ func TestIsRetryableError(t *testing.T) {
 
 func TestGetErrorMetrics(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	tests := []struct {
 		name               string
@@ -571,12 +572,12 @@ func TestGetErrorMetrics(t *testing.T) {
 
 func TestLogError(t *testing.T) {
 	locManager := createTestLocalizationManager()
-	errorHandler := NewErrorHandler(locManager)
+	errorHandler := common.NewErrorHandler(locManager)
 
 	// Test that logError doesn't panic with various inputs
-	errorHandler.logError("test context", errors.New("test error"))
-	errorHandler.logError("test context", nil)
-	errorHandler.logError("", errors.New("test error"))
+	errorHandler.LogError("test context", errors.New("test error"))
+	errorHandler.LogError("test context", nil)
+	errorHandler.LogError("", errors.New("test error"))
 }
 
 // Helper function to create a test localization manager

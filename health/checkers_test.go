@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"oba-twilio/client"
-	"oba-twilio/handlers"
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
 )
 
@@ -109,7 +109,7 @@ func TestSessionStoreHealthChecker_NilStore(t *testing.T) {
 
 func TestSessionStoreHealthChecker_WithStore(t *testing.T) {
 	// Create a session store for testing
-	store := handlers.NewImprovedSessionStore()
+	store := common.NewImprovedSessionStore()
 	defer store.Close()
 
 	checker := NewSessionStoreHealthChecker(store)
@@ -279,7 +279,7 @@ func BenchmarkOneBusAwayHealthChecker(b *testing.B) {
 }
 
 func BenchmarkSessionStoreHealthChecker(b *testing.B) {
-	store := handlers.NewImprovedSessionStore()
+	store := common.NewImprovedSessionStore()
 	defer store.Close()
 
 	checker := NewSessionStoreHealthChecker(store)
@@ -296,8 +296,8 @@ func createTestOneBusAwayClient() *client.OneBusAwayClient {
 	return client.NewOneBusAwayClient("https://api.pugetsound.onebusaway.org", "test-key")
 }
 
-func createTestSessionStore() *handlers.ImprovedSessionStore {
-	return handlers.NewImprovedSessionStore()
+func createTestSessionStore() *common.ImprovedSessionStore {
+	return common.NewImprovedSessionStore()
 }
 
 func createTestLocalizationManager() *localization.LocalizationManager {

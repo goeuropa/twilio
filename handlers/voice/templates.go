@@ -1,4 +1,4 @@
-package formatters
+package voice
 
 import (
 	_ "embed"
@@ -18,7 +18,7 @@ var voiceErrorTemplate string
 //go:embed templates/voice_disambiguation.xml
 var voiceDisambiguationTemplate string
 
-type VoiceTemplateManager struct {
+type TemplateManager struct {
 	startTemplate          *template.Template
 	findStopTemplate       *template.Template
 	errorTemplate          *template.Template
@@ -46,8 +46,7 @@ type VoiceDisambiguationContext struct {
 	Language             string `json:"language,omitempty"`
 }
 
-func NewVoiceTemplateManager() (*VoiceTemplateManager, error) {
-	// Create function map for template functions
+func NewTemplateManager() (*TemplateManager, error) {
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 	}
@@ -72,7 +71,7 @@ func NewVoiceTemplateManager() (*VoiceTemplateManager, error) {
 		return nil, err
 	}
 
-	return &VoiceTemplateManager{
+	return &TemplateManager{
 		startTemplate:          startTmpl,
 		findStopTemplate:       findStopTmpl,
 		errorTemplate:          errorTmpl,
@@ -80,36 +79,36 @@ func NewVoiceTemplateManager() (*VoiceTemplateManager, error) {
 	}, nil
 }
 
-func (vtm *VoiceTemplateManager) RenderVoiceStart(ctx VoiceStartContext) (string, error) {
+func (tm *TemplateManager) RenderVoiceStart(ctx VoiceStartContext) (string, error) {
 	var buf strings.Builder
-	err := vtm.startTemplate.Execute(&buf, ctx)
+	err := tm.startTemplate.Execute(&buf, ctx)
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-func (vtm *VoiceTemplateManager) RenderVoiceFindStop(ctx VoiceFindStopContext) (string, error) {
+func (tm *TemplateManager) RenderVoiceFindStop(ctx VoiceFindStopContext) (string, error) {
 	var buf strings.Builder
-	err := vtm.findStopTemplate.Execute(&buf, ctx)
+	err := tm.findStopTemplate.Execute(&buf, ctx)
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-func (vtm *VoiceTemplateManager) RenderVoiceError(ctx VoiceErrorContext) (string, error) {
+func (tm *TemplateManager) RenderVoiceError(ctx VoiceErrorContext) (string, error) {
 	var buf strings.Builder
-	err := vtm.errorTemplate.Execute(&buf, ctx)
+	err := tm.errorTemplate.Execute(&buf, ctx)
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-func (vtm *VoiceTemplateManager) RenderVoiceDisambiguation(ctx VoiceDisambiguationContext) (string, error) {
+func (tm *TemplateManager) RenderVoiceDisambiguation(ctx VoiceDisambiguationContext) (string, error) {
 	var buf strings.Builder
-	err := vtm.disambiguationTemplate.Execute(&buf, ctx)
+	err := tm.disambiguationTemplate.Execute(&buf, ctx)
 	if err != nil {
 		return "", err
 	}

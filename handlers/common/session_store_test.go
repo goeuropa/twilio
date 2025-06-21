@@ -1,4 +1,4 @@
-package handlers
+package common
 
 import (
 	"fmt"
@@ -164,7 +164,7 @@ func TestSessionStore_SessionExpiration(t *testing.T) {
 		StopOptions: []models.StopOption{
 			{FullStopID: "1_75403", AgencyName: "Metro", StopName: "Test Stop"},
 		},
-		CreatedAt: time.Now().Unix() - (sessionTimeoutMinutes+1)*60,
+		CreatedAt: time.Now().Unix() - (SessionTimeoutMinutes+1)*60,
 	}
 
 	// Set the session normally first

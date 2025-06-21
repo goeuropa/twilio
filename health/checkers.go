@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"oba-twilio/client"
-	"oba-twilio/handlers"
+	"oba-twilio/handlers/common"
 	"oba-twilio/localization"
 )
 
@@ -198,10 +198,10 @@ func (c *OneBusAwayHealthChecker) Check() CheckResult {
 
 // SessionStoreHealthChecker checks session store health
 type SessionStoreHealthChecker struct {
-	store *handlers.ImprovedSessionStore
+	store *common.ImprovedSessionStore
 }
 
-func NewSessionStoreHealthChecker(sessionStore *handlers.ImprovedSessionStore) *SessionStoreHealthChecker {
+func NewSessionStoreHealthChecker(sessionStore *common.ImprovedSessionStore) *SessionStoreHealthChecker {
 	return &SessionStoreHealthChecker{store: sessionStore}
 }
 

@@ -1,4 +1,4 @@
-package handlers
+package common
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	sessionTimeoutMinutes    = 10
+	SessionTimeoutMinutes    = 10
 	smsSessionTimeoutMinutes = 15
 	cleanupIntervalMinutes   = 5
 	maxSessions              = 10000
@@ -216,7 +216,7 @@ func (s *ImprovedSessionStore) validateSession(phoneNumber string, entry *Sessio
 
 	switch entry.sessionType {
 	case 0, 1: // disambiguation, voice
-		timeout = sessionTimeoutMinutes * 60
+		timeout = SessionTimeoutMinutes * 60
 	case 2: // SMS
 		timeout = smsSessionTimeoutMinutes * 60
 	default:
@@ -546,7 +546,7 @@ func (s *ImprovedSessionStore) ExpireSession(phoneNumber string) {
 		var timeout int64
 		switch entry.sessionType {
 		case 0, 1: // disambiguation, voice
-			timeout = (sessionTimeoutMinutes + 1) * 60
+			timeout = (SessionTimeoutMinutes + 1) * 60
 		case 2: // SMS
 			timeout = (smsSessionTimeoutMinutes + 1) * 60
 		}

@@ -1,4 +1,4 @@
-package handlers
+package common
 
 import (
 	"errors"
@@ -18,21 +18,12 @@ import (
 // ErrorHandler provides centralized error handling with localization support
 type ErrorHandler struct {
 	LocalizationManager *localization.LocalizationManager
-	TemplateManager     *formatters.VoiceTemplateManager
 }
 
 // NewErrorHandler creates a new error handler instance
 func NewErrorHandler(locManager *localization.LocalizationManager) *ErrorHandler {
-	templateManager, err := formatters.NewVoiceTemplateManager()
-	if err != nil {
-		log.Printf("Warning: Failed to initialize voice template manager in error handler: %v", err)
-		// Continue without template manager - voice errors will use fallback
-		templateManager = nil
-	}
-
 	return &ErrorHandler{
 		LocalizationManager: locManager,
-		TemplateManager:     templateManager,
 	}
 }
 
@@ -70,22 +61,8 @@ func (e *ErrorHandler) HandleVoiceError(c *gin.Context, err error, language stri
 
 	c.Header("Content-Type", "text/xml")
 
-	var twiml string
-	var twimlErr error
-
-	if e.TemplateManager != nil {
-		twiml, twimlErr = e.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-			ErrorMessage: message,
-		})
-	}
-
-	if e.TemplateManager == nil || twimlErr != nil {
-		if twimlErr != nil {
-			log.Printf("Failed to generate Voice TwiML for error: %v", twimlErr)
-		}
-		// Fallback to simple TwiML structure
-		twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
-	}
+	// Use simple TwiML structure for voice errors
+	twiml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
 
 	c.String(http.StatusOK, twiml)
 }
@@ -107,14 +84,7 @@ func (e *ErrorHandler) HandleValidationError(c *gin.Context, err error, channel,
 
 	switch strings.ToLower(channel) {
 	case "voice":
-		if e.TemplateManager != nil {
-			twiml, twimlErr = e.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-				ErrorMessage: message,
-			})
-		}
-		if e.TemplateManager == nil || twimlErr != nil {
-			twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
-		}
+		twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
 	default: // SMS or fallback
 		twiml, twimlErr = formatters.GenerateTwiMLSMS(message)
 		if twimlErr != nil {
@@ -143,14 +113,7 @@ func (e *ErrorHandler) HandleInternalError(c *gin.Context, err error, channel, l
 
 	switch strings.ToLower(channel) {
 	case "voice":
-		if e.TemplateManager != nil {
-			twiml, twimlErr = e.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
-				ErrorMessage: message,
-			})
-		}
-		if e.TemplateManager == nil || twimlErr != nil {
-			twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
-		}
+		twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
 	default: // SMS or fallback
 		twiml, twimlErr = formatters.GenerateTwiMLSMS(message)
 		if twimlErr != nil {
@@ -207,7 +170,7 @@ func (e *ErrorHandler) mapAppErrorToUserMessage(appErr *models.AppError, languag
 
 	case models.ErrorCodeStopNotFound:
 		// Try to extract stop ID from error details for better user message
-		if stopID := extractStopIDFromError(appErr.Details); stopID != "" {
+		if stopID := ExtractStopIDFromError(appErr.Details); stopID != "" {
 			return "error.stop_not_found", []interface{}{stopID}
 		}
 		return "error.stop_not_found", []interface{}{"the requested stop"}
@@ -232,8 +195,8 @@ func (e *ErrorHandler) mapAppErrorToUserMessage(appErr *models.AppError, languag
 	}
 }
 
-// extractStopIDFromError extracts stop ID from error details for better user messages
-func extractStopIDFromError(details string) string {
+// ExtractStopIDFromError extracts stop ID from error details for better user messages
+func ExtractStopIDFromError(details string) string {
 	// Pattern to match stop IDs in error messages
 	// Matches: "Stop 'ID' does not exist" or "Stop ID 'ID' is not..."
 	patterns := []string{

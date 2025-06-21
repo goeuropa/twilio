@@ -15,6 +15,7 @@ import (
 	"oba-twilio/analytics/providers/plausible"
 	"oba-twilio/client"
 	"oba-twilio/handlers"
+	"oba-twilio/handlers/common"
 	"oba-twilio/health"
 	"oba-twilio/localization"
 	"oba-twilio/middleware"
@@ -135,7 +136,7 @@ func main() {
 	}
 
 	// Initialize session store
-	sessionStore := handlers.NewImprovedSessionStore()
+	sessionStore := common.NewImprovedSessionStore()
 	defer sessionStore.Close()
 
 	smsHandler := handlers.NewSMSHandler(obaClient, locManager)
@@ -143,7 +144,7 @@ func main() {
 
 	// Pass analytics manager to handlers
 	handlers.SetAnalyticsManager(smsHandler, analyticsManager, analyticsConfig.HashSalt)
-	handlers.SetAnalyticsManager(voiceHandler, analyticsManager, analyticsConfig.HashSalt)
+	voiceHandler.SetAnalytics(analyticsManager, analyticsConfig.HashSalt)
 
 	// Initialize health check system
 	healthManager := health.NewManager(
