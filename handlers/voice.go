@@ -413,7 +413,16 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	}
 
 	language := h.getLanguageFromRequest(c)
+	log.Printf("Formatting voice response for %s: stop=%s, arrivals=%d", phoneNumber, stopName, len(arrivals))
+
 	message := formatters.FormatVoiceResponse(arrivals, stopName, h.LocalizationManager, language)
+	log.Printf("Voice message for %s: %s", phoneNumber, message)
+	if message == "" {
+		log.Printf("Empty voice response generated for %s", phoneNumber)
+		language := h.getLanguageFromRequest(c)
+		h.ErrorHandler.HandleVoiceError(c, fmt.Errorf("failed to format voice response"), language)
+		return
+	}
 
 	// Set up voice session for menu options
 	session := &models.VoiceSession{
@@ -425,6 +434,7 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 	}
 	menuPrompt := h.LocalizationManager.GetString("voice.menu.more_departures", language) + " " + h.LocalizationManager.GetString("voice.menu.main_menu", language)
 
+	log.Printf("Rendering TwiML for %s with message length: %d", phoneNumber, len(message))
 	twiml, err := h.TemplateManager.RenderVoiceFindStop(formatters.VoiceFindStopContext{
 		ArrivalsMessage: message,
 		MinutesAfter:    minutesAfter,
@@ -432,11 +442,26 @@ func (h *VoiceHandler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phon
 		Language:        language,
 	})
 	if err != nil {
-		log.Printf("Failed to generate TwiML: %v", err)
+		log.Printf("Failed to generate TwiML for %s: %v", phoneNumber, err)
 		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
-		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
+		errorTwiml, err2 := h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
 			ErrorMessage: errorMsg,
 		})
+		if err2 != nil {
+			log.Printf("Failed to generate error TwiML for %s: %v", phoneNumber, err2)
+			// Use absolute fallback
+			twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, errorMsg)
+		} else {
+			twiml = errorTwiml
+		}
+	}
+
+	log.Printf("Generated TwiML for %s, length: %d", phoneNumber, len(twiml))
+	// Log first 500 chars of TwiML for debugging
+	if len(twiml) > 500 {
+		log.Printf("TwiML content preview: %s...", twiml[:500])
+	} else {
+		log.Printf("TwiML content: %s", twiml)
 	}
 
 	c.String(http.StatusOK, twiml)
@@ -454,6 +479,7 @@ func (h *VoiceHandler) getLanguageFromRequest(c *gin.Context) string {
 // renderMainMenuWithLanguage renders the main menu for single language setup
 func (h *VoiceHandler) renderMainMenuWithLanguage(c *gin.Context, language string) {
 	prompt := h.LocalizationManager.GetString("voice.welcome", language)
+	log.Printf("Rendering main menu with language %s, prompt: %s", language, prompt)
 
 	twiml, err := h.TemplateManager.RenderVoiceStart(formatters.VoiceStartContext{
 		WelcomePrompt: prompt,
@@ -465,6 +491,11 @@ func (h *VoiceHandler) renderMainMenuWithLanguage(c *gin.Context, language strin
 		twiml, _ = h.TemplateManager.RenderVoiceError(formatters.VoiceErrorContext{
 			ErrorMessage: errorMsg,
 		})
+	}
+
+	log.Printf("Generated initial voice TwiML, length: %d", len(twiml))
+	if len(twiml) < 1000 {
+		log.Printf("Initial voice TwiML content: %s", twiml)
 	}
 
 	c.String(http.StatusOK, twiml)

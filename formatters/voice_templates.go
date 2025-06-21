@@ -2,8 +2,8 @@ package formatters
 
 import (
 	_ "embed"
+	"html/template"
 	"strings"
-	"text/template"
 )
 
 //go:embed templates/voice_start.xml
@@ -86,7 +86,7 @@ func (vtm *VoiceTemplateManager) RenderVoiceStart(ctx VoiceStartContext) (string
 	if err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + buf.String(), nil
 }
 
 func (vtm *VoiceTemplateManager) RenderVoiceFindStop(ctx VoiceFindStopContext) (string, error) {
@@ -95,7 +95,7 @@ func (vtm *VoiceTemplateManager) RenderVoiceFindStop(ctx VoiceFindStopContext) (
 	if err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + buf.String(), nil
 }
 
 func (vtm *VoiceTemplateManager) RenderVoiceError(ctx VoiceErrorContext) (string, error) {
@@ -104,7 +104,7 @@ func (vtm *VoiceTemplateManager) RenderVoiceError(ctx VoiceErrorContext) (string
 	if err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + buf.String(), nil
 }
 
 func (vtm *VoiceTemplateManager) RenderVoiceDisambiguation(ctx VoiceDisambiguationContext) (string, error) {
@@ -113,5 +113,5 @@ func (vtm *VoiceTemplateManager) RenderVoiceDisambiguation(ctx VoiceDisambiguati
 	if err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + buf.String(), nil
 }
