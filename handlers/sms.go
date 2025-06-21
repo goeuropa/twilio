@@ -253,20 +253,22 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		message += fmt.Sprintf("\n\n%s | %s", moreHint, helpHint)
 	}
 
+	// Generate TwiML response first to ensure we always send a response
+	twiml, err := formatters.GenerateTwiMLSMS(message)
+	if err != nil {
+		h.ErrorHandler.HandleInternalError(c, err, "sms", session.Language)
+		return
+	}
+
 	// Update session with current stop atomically
 	newSession := *session
 	newSession.LastStopID = fullStopID
 	newSession.LastQueryTime = time.Now().Unix()
 	if err := h.SessionStore.SetSMSSession(phoneNumber, &newSession); err != nil {
+		// Log error but still send the response
 		log.Printf("Failed to set SMS session for %s: %v", phoneNumber, err)
-		return
-	}
-	*session = newSession
-
-	twiml, err := formatters.GenerateTwiMLSMS(message)
-	if err != nil {
-		h.ErrorHandler.HandleInternalError(c, err, "sms", session.Language)
-		return
+	} else {
+		*session = newSession
 	}
 
 	c.String(http.StatusOK, twiml)
@@ -341,10 +343,11 @@ func (h *SMSHandler) handleMoreRequest(c *gin.Context, req models.TwilioSMSReque
 	updatedSession.WindowMinutes = newWindow
 	updatedSession.LastQueryTime = time.Now().Unix()
 	if err := h.SessionStore.SetSMSSession(req.From, &updatedSession); err != nil {
+		// Log error but continue to send response
 		log.Printf("Failed to set SMS session for %s: %v", req.From, err)
-		return
+	} else {
+		*session = updatedSession
 	}
-	*session = updatedSession
 
 	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, session.LastStopID, "", session)
 }
@@ -420,10 +423,11 @@ func (h *SMSHandler) handleTimeQuery(c *gin.Context, req models.TwilioSMSRequest
 		updatedSession.WindowMinutes = newWindow
 		updatedSession.LastQueryTime = time.Now().Unix()
 		if err := h.SessionStore.SetSMSSession(req.From, &updatedSession); err != nil {
+			// Log error but continue to send response
 			log.Printf("Failed to set SMS session for %s: %v", req.From, err)
-			return false
+		} else {
+			*session = updatedSession
 		}
-		*session = updatedSession
 		h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, session.LastStopID, "", session)
 		return true
 	}
