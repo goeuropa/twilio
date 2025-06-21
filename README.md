@@ -1,6 +1,9 @@
+<img src="readme-resources/header.png" alt="" />
+
 # OneBusAway Twilio Integration
 
-A Go web application that bridges Twilio SMS and voice services with OneBusAway transit APIs, allowing users to get real-time bus arrival information via text message or phone call.
+A Go web application that bridges Twilio SMS and voice services with OneBusAway transit APIs, allowing users to get
+real-time bus arrival information via text message or phone call.
 
 ## 🚌 Features
 
@@ -52,8 +55,6 @@ oba-twilio/
 ### Prerequisites
 
 - **Go 1.18+** ([installation guide](https://golang.org/doc/install))
-- **Internet connection** (for OneBusAway API calls)
-- **Optional**: Twilio account for production deployment
 
 ### Installation
 
@@ -68,7 +69,7 @@ oba-twilio/
    go mod download
    ```
 
-3. **Set up environment** (optional):
+3. **Set up environment**:
    ```bash
    cp .env.example .env
    # Edit .env to configure your OneBusAway server and settings
@@ -223,40 +224,96 @@ curl -X POST \
 
 Create a `.env` file or set environment variables:
 
+| Variable | Description | Default Value | Required/Optional |
+|----------|-------------|---------------|-------------------|
+| **Server Configuration** | | | |
+| `PORT` | Server port number | `8080` | Optional |
+| **OneBusAway API Configuration** | | | |
+| `ONEBUSAWAY_API_KEY` | API key for OneBusAway server | `test` | Required |
+| `ONEBUSAWAY_BASE_URL` | OneBusAway API base URL | `https://api.pugetsound.onebusaway.org` | Optional |
+| **Localization** | | | |
+| `SUPPORTED_LANGUAGES` | Comma-separated list of supported language codes | `en-US` | Optional |
+| **Twilio Configuration** | | | |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID (for outbound features) | - | Optional |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token (for outbound features) | - | Optional |
+| **Analytics Configuration** | | | |
+| `ANALYTICS_ENABLED` | Enable/disable analytics collection | `false` | Optional |
+| `ANALYTICS_HASH_SALT` | Salt for hashing sensitive analytics data (32+ char random string) | - | Required if analytics enabled |
+| `ANALYTICS_WORKER_COUNT` | Number of analytics worker threads | `4` | Optional |
+| `ANALYTICS_QUEUE_SIZE` | Size of analytics event queue | `1000` | Optional |
+| `ANALYTICS_SHUTDOWN_TIMEOUT` | Timeout for analytics shutdown (seconds) | `30` | Optional |
+| **Plausible Analytics Provider** | | | |
+| `PLAUSIBLE_ENABLED` | Enable/disable Plausible analytics provider | `false` | Optional |
+| `PLAUSIBLE_DOMAIN` | Domain for Plausible analytics tracking | - | Required if Plausible enabled |
+| `PLAUSIBLE_API_URL` | Custom Plausible API URL | `https://plausible.io` | Optional |
+| `PLAUSIBLE_API_KEY` | Plausible API key (for custom domains) | - | Optional |
+| `PLAUSIBLE_BATCH_SIZE` | Batch size for Plausible events | `50` | Optional |
+| `PLAUSIBLE_FLUSH_INTERVAL` | Flush interval for Plausible events (seconds) | `30` | Optional |
+| `PLAUSIBLE_HTTP_TIMEOUT` | HTTP timeout for Plausible requests (seconds) | `10` | Optional |
+| `PLAUSIBLE_MAX_RETRIES` | Maximum retries for failed Plausible requests | `3` | Optional |
+| `PLAUSIBLE_RETRY_DELAY` | Delay between Plausible retries (seconds) | `1` | Optional |
+
+### Example .env file:
+
 ```bash
 # Server Configuration
-PORT=8080                    # Server port (default: 8080)
+PORT=8080
 
 # OneBusAway API Configuration
-ONEBUSAWAY_API_KEY=test # API key (default provided)
-ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org # API base URL (default: Puget Sound)
+ONEBUSAWAY_API_KEY=your_actual_api_key
+ONEBUSAWAY_BASE_URL=https://api.pugetsound.onebusaway.org
+
+# Localization (optional)
+SUPPORTED_LANGUAGES=en-US,es-US,fr-FR
 
 # Twilio (optional - for outbound features)
 TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
+
+# Analytics (optional)
+ANALYTICS_ENABLED=true
+# Generate a secure salt using one of these methods:
+# - openssl rand -base64 32
+# - cat /dev/urandom | head -c 32 | base64
+# - pwgen -s 32 1
+ANALYTICS_HASH_SALT=kJ8Q2m5bC9tL3nP7sR4wX6aY1dF0eG2h
+
+# Plausible Analytics (optional)
+PLAUSIBLE_ENABLED=true
+PLAUSIBLE_DOMAIN=your-domain.com
 ```
 
-### Supported OneBusAway Servers
+### Creating a Secure Hash Salt
 
-The application can be configured to work with any OneBusAway server deployment by setting the `ONEBUSAWAY_BASE_URL` environment variable:
+The `ANALYTICS_HASH_SALT` is used to anonymize sensitive data like phone numbers before storing them in analytics. To generate a secure salt:
 
-| Region | Server URL | Coverage Area | Transit Agencies |
-|--------|------------|---------------|------------------|
-| **Puget Sound** (default) | `https://api.pugetsound.onebusaway.org` | Seattle, WA metro | King County Metro, Sound Transit, Pierce Transit, Community Transit, Kitsap Transit, Everett Transit, Washington State Ferries |
-| **Tampa** | `https://api.tampa.onebusaway.org` | Tampa Bay, FL | Hillsborough Area Regional Transit (HART) |
-| **Davis/UC Davis** | `https://api.unitrans.onebusawaycloud.com` | Davis, CA | Unitrans |
-| **Local Development** | `http://localhost:8080` | Your local setup | Custom GTFS data |
-
-**Example Configuration for Tampa**:
+**Option 1: Using OpenSSL (recommended)**
 ```bash
-export ONEBUSAWAY_BASE_URL=https://api.tampa.onebusaway.org
-export ONEBUSAWAY_API_KEY=test
-go run main.go
+openssl rand -base64 32
+# Example output: kJ8Q2m5bC9tL3nP7sR4wX6aY1dF0eG2h
 ```
+
+**Option 2: Using /dev/urandom**
+```bash
+cat /dev/urandom | head -c 32 | base64
+# Example output: 7xNmP3sK9wL2bQ5tR8jC1vF6aE4dG0hY
+```
+
+**Option 3: Using pwgen**
+```bash
+pwgen -s 32 1
+# Example output: Xk9Lm2Np7Qr3Ws5Yt8Zu1Av4Bx6Cz0De
+```
+
+The salt should be:
+- At least 32 characters long
+- Randomly generated
+- Kept secret and not shared
+- Different for each deployment
 
 ### Stop ID Resolution
 
-The app automatically resolves stop IDs by trying different agency prefixes. The prefixes used are optimized for the Puget Sound region by default, but work across different OneBusAway deployments:
+The app automatically resolves stop IDs by trying different agency prefixes:
 
 - Input: `75403` → Tries `1_75403`, `40_75403`, `29_75403`, etc.
 - Input: `1_75403` → Uses as-is (already has agency prefix)
@@ -264,41 +321,6 @@ The app automatically resolves stop IDs by trying different agency prefixes. The
 **Note**: Different OneBusAway servers use different agency ID schemes.
 
 The app will attempt all prefixes and return the first successful match, making it flexible across different deployments.
-
-### Server Discovery
-
-To find available OneBusAway servers and their coverage areas:
-
-1. **OneBusAway Regions API**: `http://regions.onebusaway.org/regions-v3.json`
-2. **Test server connectivity**:
-   ```bash
-   curl https://api.pugetsound.onebusaway.org/api/where/agencies-with-coverage.json?key=test
-   ```
-3. **Check agency IDs for a server**:
-   ```bash
-   # Replace with your target server
-   curl https://api.tampa.onebusaway.org/api/where/agencies-with-coverage.json?key=test
-   ```
-
-### Testing Different Servers
-
-**Test Tampa server**:
-```bash
-export ONEBUSAWAY_BASE_URL=https://api.tampa.onebusaway.org
-go run main.go
-
-# Test with a Tampa stop ID (example)
-curl -X POST -d "From=%2B14444444444&Body=1234" http://localhost:8080/sms
-```
-
-**Test Unitrans server**:
-```bash
-export ONEBUSAWAY_BASE_URL=https://api.unitrans.onebusawaycloud.com
-go run main.go
-
-# Test with a Unitrans stop ID (example)
-curl -X POST -d "From=%2B14444444444&Body=22136" http://localhost:8080/sms
-```
 
 ## 🚀 Deployment
 
@@ -328,7 +350,7 @@ git push heroku main
 
 **Docker**:
 ```dockerfile
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN go build -o oba-twilio .
@@ -353,7 +375,7 @@ CMD ["./oba-twilio"]
 
 **1. "No upcoming arrivals found"**
 - **Cause**: Invalid stop ID or no current service
-- **Solution**: Verify stop ID exists at [OneBusAway website](https://pugetsound.onebusaway.org/)
+- **Solution**: Verify stop ID exists
 - **Example**: Stop 75403 should work, but 12345 might not exist
 
 **2. "API returned status 404"**
@@ -424,19 +446,12 @@ View detailed request/response logs in console.
 - Add rate limiting middleware
 - Use connection pooling for OneBusAway API calls
 
-### API Rate Limits
-
-OneBusAway API limits:
-- No hard limits documented for Puget Sound instance
-- Recommended: Don't exceed 10 requests/second
-- Cache responses for 30-60 seconds for same stop ID
-
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create feature branch: `git checkout -b feature-name`
 3. Write tests for new functionality
-4. Ensure all tests pass: `go test ./...`
+4. Ensure proper formatting, and that linting and testing passes: `make fmt && make lint && make test`
 5. Submit pull request
 
 ### Code Style
@@ -449,13 +464,12 @@ OneBusAway API limits:
 
 ## 📄 License
 
-This project is open source. See project repository for license details.
+This project is open source and made available under the Apache 2.0 license. See the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
 - **Issues**: Create GitHub issue with reproduction steps
 - **Questions**: Check existing issues or create new one
-- **Documentation**: See `project-plan.md` for detailed technical specs
 
 ## 🔗 Related Links
 
@@ -463,12 +477,6 @@ This project is open source. See project repository for license details.
 - [OneBusAway Developer API](https://developer.onebusaway.org/)
 - [OneBusAway Multi-Region Documentation](https://github.com/OneBusAway/onebusaway/wiki/Multi-Region)
 - [OneBusAway Server Directory](http://regions.onebusaway.org/regions-v3.json)
-- [OneBusAway Deployments](https://github.com/OneBusAway/onebusaway/wiki/OneBusAway-Deployments)
-
-### Regional OneBusAway Instances
-- [Puget Sound OneBusAway](https://pugetsound.onebusaway.org/) (Seattle area)
-- [Tampa OneBusAway](https://tampa.onebusaway.org/) (Tampa Bay area)
-- [OneBusAway Atlanta](https://atlanta.onebusaway.org/) (Atlanta metro)
 
 ### Twilio & Development Resources
 - [Twilio SMS Webhooks](https://www.twilio.com/docs/messaging/guides/webhook-request)

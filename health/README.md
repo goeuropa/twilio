@@ -2,7 +2,8 @@
 
 ## Overview
 
-The OneBusAway Twilio health check system provides comprehensive monitoring and observability for production deployments. It implements industry-standard health check patterns with Kubernetes compatibility, Prometheus metrics, and robust error handling.
+The OneBusAway Twilio health check system provides comprehensive monitoring and observability for production deployments.
+It implements industry-standard health check patterns with Kubernetes compatibility, Prometheus metrics, and robust error handling.
 
 ## Features
 
