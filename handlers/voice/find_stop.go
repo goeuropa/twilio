@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/twilio/twilio-go/twiml"
 
 	"oba-twilio/formatters"
 	"oba-twilio/models"
@@ -55,10 +56,15 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 				log.Printf("Invalid disambiguation choice from %s: %v", req.From, err)
 				language := h.getLanguageFromRequest(c)
 				errorMsg := h.LocalizationManager.GetString("voice.error.invalid_choice", language, maxChoices)
-				twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-					ErrorMessage: errorMsg,
-				})
-				c.String(http.StatusOK, twiml)
+				say := &twiml.VoiceSay{
+					Message:  errorMsg,
+					Language: language,
+				}
+				if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+					c.String(http.StatusInternalServerError, err.Error())
+				} else {
+					c.String(http.StatusOK, twimlResult)
+				}
 				return
 			}
 		}
@@ -71,10 +77,20 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 
 	stopID := req.Digits
 	if stopID == "" {
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "I didn't receive any digits. Please try calling again.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.no_digits", language)
+		if errorMsg == "" {
+			errorMsg = "I didn't receive any digits. Please try calling again."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -83,10 +99,15 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 		log.Printf("Invalid stop ID from %s: %s, error: %v", req.From, stopID, err)
 		language := h.getLanguageFromRequest(c)
 		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_stop_id", language)
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: errorMsg,
-		})
-		c.String(http.StatusOK, twiml)
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -99,16 +120,26 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 	}
 
 	if len(matchingStops) == 0 {
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.stop_not_found", language)
+		if errorMsg == "" {
+			errorMsg = "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
 	// If multiple stops found, ask user to disambiguate
 	if len(matchingStops) > 1 {
-		disambiguationMsg := h.formatVoiceDisambiguationMessage(matchingStops, stopID)
+		disambiguationMsg := h.formatVoiceDisambiguationMessage(c, matchingStops, stopID)
 
 		// Store disambiguation session
 		session := &models.DisambiguationSession{
@@ -121,16 +152,34 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 		}
 
 		// Use TwiML Gather to collect the user's choice
-		twiml, err := h.TemplateManager.RenderVoiceDisambiguation(VoiceDisambiguationContext{
-			DisambiguationPrompt: disambiguationMsg,
-		})
-		if err != nil {
-			log.Printf("Failed to generate TwiML gather: %v", err)
-			twiml, _ = h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-				ErrorMessage: "Error generating response.",
-			})
+		language := h.getLanguageFromRequest(c)
+
+		innerElts := []twiml.Element{
+			&twiml.VoiceSay{
+				Message:  disambiguationMsg,
+				Language: language,
+			},
 		}
-		c.String(http.StatusOK, twiml)
+
+		gather := &twiml.VoiceGather{
+			Action:        fmt.Sprintf("/voice/find_stop?lang=%s", language),
+			Method:        "POST",
+			Timeout:       "10",
+			NumDigits:     "1",
+			InnerElements: innerElts,
+		}
+
+		timeoutSay := &twiml.VoiceSay{
+			Message:  h.LocalizationManager.GetString("voice.error.timeout", language),
+			Language: language,
+		}
+
+		if twimlResult, err := twiml.Voice([]twiml.Element{gather, timeoutSay}); err != nil {
+			log.Printf("Failed to generate TwiML gather: %v", err)
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -156,10 +205,20 @@ func (h *Handler) parseDisambiguationChoice(digits string) int {
 func (h *Handler) handleVoiceDisambiguationChoice(c *gin.Context, req models.TwilioVoiceRequest, choice int) {
 	session := h.SessionStore.GetDisambiguationSession(req.From)
 	if session == nil {
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "No active selection. Please call again and enter a stop ID to get started.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.no_active_session", language)
+		if errorMsg == "" {
+			errorMsg = "No active selection. Please call again and enter a stop ID to get started."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -168,10 +227,20 @@ func (h *Handler) handleVoiceDisambiguationChoice(c *gin.Context, req models.Twi
 		if maxChoice > 9 {
 			maxChoice = 9 // Limit voice choices to single digits
 		}
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: fmt.Sprintf("Please press a number between 1 and %d.", maxChoice),
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_choice", language, maxChoice)
+		if errorMsg == "" {
+			errorMsg = fmt.Sprintf("Please press a number between 1 and %d.", maxChoice)
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -184,8 +253,16 @@ func (h *Handler) handleVoiceDisambiguationChoice(c *gin.Context, req models.Twi
 }
 
 // formatVoiceDisambiguationMessage creates a voice-friendly disambiguation message
-func (h *Handler) formatVoiceDisambiguationMessage(stops []models.StopOption, stopID string) string {
-	msg := fmt.Sprintf("I found %d stops with ID %s. ", len(stops), stopID)
+func (h *Handler) formatVoiceDisambiguationMessage(c *gin.Context, stops []models.StopOption, stopID string) string {
+	language := h.getLanguageFromRequest(c)
+
+	// Use localized string or fall back to English
+	msg := h.LocalizationManager.GetString("voice.disambiguation.prompt", language, len(stops), stopID)
+	if msg == "" {
+		msg = fmt.Sprintf("I found %d stops with ID %s. ", len(stops), stopID)
+	} else {
+		msg += " " // Add space after prompt
+	}
 
 	// Limit to first 9 options for voice interface (single digit choices)
 	maxStops := len(stops)
@@ -203,6 +280,7 @@ func (h *Handler) formatVoiceDisambiguationMessage(stops []models.StopOption, st
 	}
 
 	msg += "Which stop would you like?"
+
 	return msg
 }
 
@@ -259,34 +337,67 @@ func (h *Handler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phoneNumb
 	menuPrompt := h.LocalizationManager.GetString("voice.menu.more_departures", language) + " " + h.LocalizationManager.GetString("voice.menu.main_menu", language)
 
 	log.Printf("Rendering TwiML for %s with message length: %d", phoneNumber, len(message))
-	twiml, err := h.TemplateManager.RenderVoiceFindStop(VoiceFindStopContext{
-		ArrivalsMessage: message,
-		MinutesAfter:    minutesAfter,
-		MenuPrompt:      menuPrompt,
-		Language:        language,
-	})
-	if err != nil {
+
+	// Create TwiML elements
+	var elements []twiml.Element
+
+	// Add arrivals message
+	arrivalsSay := &twiml.VoiceSay{
+		Message:  message,
+		Language: language,
+	}
+	elements = append(elements, arrivalsSay)
+
+	// Add gather for menu options
+	innerElts := []twiml.Element{
+		&twiml.VoiceSay{
+			Message:  menuPrompt,
+			Language: language,
+		},
+	}
+
+	var actionURL string
+	if minutesAfter == 0 {
+		actionURL = fmt.Sprintf("/voice/menu_action?minutesAfter=60&lang=%s", language)
+	} else {
+		actionURL = fmt.Sprintf("/voice/menu_action?minutesAfter=%d&lang=%s", minutesAfter+30, language)
+	}
+
+	gather := &twiml.VoiceGather{
+		Action:        actionURL,
+		Method:        "POST",
+		NumDigits:     "1",
+		InnerElements: innerElts,
+	}
+	elements = append(elements, gather)
+
+	// Generate TwiML
+	if twimlResult, err := twiml.Voice(elements); err != nil {
 		log.Printf("Failed to generate TwiML for %s: %v", phoneNumber, err)
 		errorMsg := h.LocalizationManager.GetString("voice.error.template_failed", language)
-		errorTwiml, err2 := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: errorMsg,
-		})
-		if err2 != nil {
+
+		// Try to generate error response
+		errorSay := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if errorTwiml, err2 := twiml.Voice([]twiml.Element{errorSay}); err2 != nil {
 			log.Printf("Failed to generate error TwiML for %s: %v", phoneNumber, err2)
 			// Use absolute fallback
-			twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, errorMsg)
+			fallback := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, errorMsg)
+			c.String(http.StatusOK, fallback)
 		} else {
-			twiml = errorTwiml
+			c.String(http.StatusOK, errorTwiml)
 		}
-	}
-
-	log.Printf("Generated TwiML for %s, length: %d", phoneNumber, len(twiml))
-	// Log first 500 chars of TwiML for debugging
-	if len(twiml) > 500 {
-		log.Printf("TwiML content preview: %s...", twiml[:500])
+		return
 	} else {
-		log.Printf("TwiML content: %s", twiml)
+		log.Printf("Generated TwiML for %s, length: %d", phoneNumber, len(twimlResult))
+		// Log first 500 chars of TwiML for debugging
+		if len(twimlResult) > 500 {
+			log.Printf("TwiML content preview: %s...", twimlResult[:500])
+		} else {
+			log.Printf("TwiML content: %s", twimlResult)
+		}
+		c.String(http.StatusOK, twimlResult)
 	}
-
-	c.String(http.StatusOK, twiml)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/twilio/twilio-go/twiml"
 
 	"oba-twilio/formatters"
 	"oba-twilio/localization"
@@ -61,10 +62,20 @@ func (e *ErrorHandler) HandleVoiceError(c *gin.Context, err error, language stri
 
 	c.Header("Content-Type", "text/xml")
 
-	// Use simple TwiML structure for voice errors
-	twiml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+	// Use TwiML library for voice errors
+	say := &twiml.VoiceSay{
+		Message:  message,
+		Language: language,
+	}
 
-	c.String(http.StatusOK, twiml)
+	if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+		log.Printf("Failed to generate voice error TwiML: %v", err)
+		// Fallback to simple XML
+		fallback := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+		c.String(http.StatusOK, fallback)
+	} else {
+		c.String(http.StatusOK, twimlResult)
+	}
 }
 
 // HandleValidationError handles validation errors with appropriate HTTP status
@@ -79,21 +90,30 @@ func (e *ErrorHandler) HandleValidationError(c *gin.Context, err error, channel,
 
 	c.Header("Content-Type", "text/xml")
 
-	var twiml string
+	var twimlResult string
 	var twimlErr error
 
 	switch strings.ToLower(channel) {
 	case "voice":
-		twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+		say := &twiml.VoiceSay{
+			Message:  message,
+			Language: language,
+		}
+		twimlResult, twimlErr = twiml.Voice([]twiml.Element{say})
+		if twimlErr != nil {
+			log.Printf("Failed to generate voice TwiML for validation error: %v", twimlErr)
+			// Fallback to simple XML
+			twimlResult = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+		}
 	default: // SMS or fallback
-		twiml, twimlErr = formatters.GenerateTwiMLSMS(message)
+		twimlResult, twimlErr = formatters.GenerateTwiMLSMS(message)
 		if twimlErr != nil {
 			log.Printf("Failed to generate SMS TwiML for validation error: %v", twimlErr)
-			twiml, _ = formatters.GenerateTwiMLSMS(e.LocalizationManager.GetString("error.general", language))
+			twimlResult, _ = formatters.GenerateTwiMLSMS(e.LocalizationManager.GetString("error.general", language))
 		}
 	}
 
-	c.String(http.StatusBadRequest, twiml)
+	c.String(http.StatusBadRequest, twimlResult)
 }
 
 // HandleInternalError handles internal server errors
@@ -108,21 +128,30 @@ func (e *ErrorHandler) HandleInternalError(c *gin.Context, err error, channel, l
 
 	c.Header("Content-Type", "text/xml")
 
-	var twiml string
+	var twimlResult string
 	var twimlErr error
 
 	switch strings.ToLower(channel) {
 	case "voice":
-		twiml = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+		say := &twiml.VoiceSay{
+			Message:  message,
+			Language: language,
+		}
+		twimlResult, twimlErr = twiml.Voice([]twiml.Element{say})
+		if twimlErr != nil {
+			log.Printf("Failed to generate voice TwiML for internal error: %v", twimlErr)
+			// Fallback to simple XML
+			twimlResult = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>%s</Say></Response>`, message)
+		}
 	default: // SMS or fallback
-		twiml, twimlErr = formatters.GenerateTwiMLSMS(message)
+		twimlResult, twimlErr = formatters.GenerateTwiMLSMS(message)
 		if twimlErr != nil {
 			log.Printf("Failed to generate SMS TwiML for internal error: %v", twimlErr)
-			twiml, _ = formatters.GenerateTwiMLSMS(e.LocalizationManager.GetString("error.general", language))
+			twimlResult, _ = formatters.GenerateTwiMLSMS(e.LocalizationManager.GetString("error.general", language))
 		}
 	}
 
-	c.String(http.StatusInternalServerError, twiml)
+	c.String(http.StatusInternalServerError, twimlResult)
 }
 
 // getLocalizedErrorMessage gets a localized error message based on the error type

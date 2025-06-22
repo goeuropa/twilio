@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/twilio/twilio-go/twiml"
 
 	"oba-twilio/models"
 )
@@ -31,10 +32,20 @@ func (h *Handler) HandleVoiceMenuAction(c *gin.Context) {
 		h.handleReturnToMainMenu(c, req)
 	default:
 		// Invalid choice
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Please press 1 or 2.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("voice.error.invalid_choice", language, 2)
+		if errorMsg == "" {
+			errorMsg = "Please press 1 or 2."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 	}
 }
 
@@ -51,20 +62,40 @@ func (h *Handler) handleExtendDepartures(c *gin.Context, req models.TwilioVoiceR
 	minutesAfterStr := c.Query("minutesAfter")
 	if minutesAfterStr == "" {
 		log.Printf("Missing minutesAfter parameter in request from %s", req.From)
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("error.internal_error", language)
+		if errorMsg == "" {
+			errorMsg = "Sorry, there was an error processing your request. Please try again."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
 	newMinutesAfter, err := strconv.Atoi(minutesAfterStr)
 	if err != nil {
 		log.Printf("Invalid minutesAfter parameter: %s from %s", minutesAfterStr, req.From)
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("error.internal_error", language)
+		if errorMsg == "" {
+			errorMsg = "Sorry, there was an error processing your request. Please try again."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -72,10 +103,20 @@ func (h *Handler) handleExtendDepartures(c *gin.Context, req models.TwilioVoiceR
 	session.MinutesAfter = newMinutesAfter
 	if err := h.SessionStore.SetVoiceSession(req.From, session); err != nil {
 		log.Printf("Failed to update voice session for %s: %v", req.From, err)
-		twiml, _ := h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Sorry, there was an error processing your request. Please try again.",
-		})
-		c.String(http.StatusOK, twiml)
+		language := h.getLanguageFromRequest(c)
+		errorMsg := h.LocalizationManager.GetString("error.internal_error", language)
+		if errorMsg == "" {
+			errorMsg = "Sorry, there was an error processing your request. Please try again."
+		}
+		say := &twiml.VoiceSay{
+			Message:  errorMsg,
+			Language: language,
+		}
+		if twimlResult, err := twiml.Voice([]twiml.Element{say}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			c.String(http.StatusOK, twimlResult)
+		}
 		return
 	}
 
@@ -94,17 +135,6 @@ func (h *Handler) handleReturnToMainMenu(c *gin.Context, req models.TwilioVoiceR
 
 // returnToMainMenu renders the main menu
 func (h *Handler) returnToMainMenu(c *gin.Context) {
-	prompt := "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key."
-
-	twiml, err := h.TemplateManager.RenderVoiceStart(VoiceStartContext{
-		WelcomePrompt: prompt,
-	})
-	if err != nil {
-		log.Printf("Failed to generate TwiML: %v", err)
-		twiml, _ = h.TemplateManager.RenderVoiceError(VoiceErrorContext{
-			ErrorMessage: "Error generating response.",
-		})
-	}
-
-	c.String(http.StatusOK, twiml)
+	language := h.getLanguageFromRequest(c)
+	h.renderMainMenuWithLanguage(c, language)
 }
