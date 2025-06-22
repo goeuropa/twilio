@@ -5,6 +5,8 @@ import (
 	"oba-twilio/handlers/voice"
 	"oba-twilio/localization"
 	"oba-twilio/middleware"
+
+	"github.com/gin-gonic/gin"
 )
 
 type VoiceHandler struct {
@@ -26,5 +28,23 @@ func (h *VoiceHandler) Close() {
 func (h *VoiceHandler) SetAnalytics(analyticsManager middleware.AnalyticsManager, hashSalt string) {
 	if h.Handler != nil {
 		h.Handler.SetAnalytics(analyticsManager, hashSalt)
+	}
+}
+
+func (h *VoiceHandler) HandleVoiceMenuAction(c *gin.Context) {
+	if h.Handler != nil {
+		h.Handler.HandleVoiceMenuAction(c)
+	}
+}
+
+func (h *VoiceHandler) HandleVoiceStart(c *gin.Context) {
+	if h.Handler != nil {
+		h.Handler.HandleVoiceStart(c)
+	}
+}
+
+func (h *VoiceHandler) HandleFindStop(c *gin.Context) {
+	if h.Handler != nil {
+		h.Handler.HandleFindStop(c)
 	}
 }

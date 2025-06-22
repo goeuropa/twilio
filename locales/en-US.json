@@ -1,5 +1,6 @@
 {
-  "voice.welcome": "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key.",
+  "voice.welcome": "Banana! Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key.",
+  "voice.timeout": "Sorry, I didn't hear anything. Please call back and try again.",
   "voice.error.invalid_request": "Invalid request format.",
   "voice.error.no_stops_found": "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
   "voice.error.template_failed": "Error generating response.",

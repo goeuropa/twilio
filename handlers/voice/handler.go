@@ -2,6 +2,8 @@ package voice
 
 import (
 	"log"
+	"oba-twilio/models"
+	"oba-twilio/validation"
 
 	"github.com/gin-gonic/gin"
 
@@ -54,4 +56,28 @@ func (h *Handler) getLanguageFromRequest(c *gin.Context) string {
 		return language
 	}
 	return h.LocalizationManager.GetPrimaryLanguage()
+}
+
+func (h *Handler) preprocessRequest(c *gin.Context) (*models.TwilioVoiceRequest, error) {
+	language := h.getLanguageFromRequest(c)
+
+	var req models.TwilioVoiceRequest
+
+	if err := c.ShouldBind(&req); err != nil {
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
+		return nil, err
+	}
+
+	// Validate phone number
+	if err := validation.ValidatePhoneNumber(req.From); err != nil {
+		h.ErrorHandler.HandleValidationError(c, err, "voice", language)
+		return nil, err
+	}
+
+	// Track voice request
+	if h.analyticsManager != nil {
+		middleware.TrackVoiceRequest(c.Request.Context(), h.analyticsManager, req.From, language, h.analyticsHashSalt)
+	}
+
+	return &req, nil
 }
