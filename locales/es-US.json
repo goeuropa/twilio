@@ -25,8 +25,11 @@
   "sms.no_arrivals": "No se encontraron próximas llegadas para esta parada.",
   "sms.service_unavailable": "El servicio OneBusAway no está disponible temporalmente. Por favor inténtelo de nuevo.",
   "sms.error.invalid_choice": "Por favor elija un número entre 1 y %d.",
-  "voice.error.invalid_stop_id": "ID de parada inválido. Por favor vuelva a llamar con un ID de parada válido."
-  "voice.error.invalid_choice": "Por favor presione un número entre 1 y %d."
+  "voice.error.invalid_stop_id": "ID de parada inválido. Por favor vuelva a llamar con un ID de parada válido.",
+  "voice.error.invalid_choice": "Por favor presione un número entre 1 y %d.",
+  "voice.error.no_digits": "No recibí ningún dígito. Por favor intente llamar nuevamente.",
+  "voice.error.stop_not_found": "Lo siento, no pude encontrar ninguna parada con ese ID. Por favor verifique el ID de la parada e inténtelo de nuevo.",
+  "voice.error.no_active_session": "No hay selección activa. Por favor llame nuevamente e ingrese un ID de parada para comenzar.",
   "sms.help": "Envíe un ID de parada (ej. 75403) para obtener llegadas. Responda 'more' para autobuses posteriores, 'help' para este mensaje.",
   "sms.menu.more_hint": "Responda 'more' para autobuses posteriores",
   "sms.menu.new_hint": "Responda 'new' para una parada diferente",

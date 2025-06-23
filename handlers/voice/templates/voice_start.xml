@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Gather numDigits="6" finishOnKey="#" timeout="20" action="/voice/find_stop{{if .Language}}?lang={{.Language}}{{end}}" method="POST">
-        <Say>{{.WelcomePrompt}}</Say>
-    </Gather>
-    <Say>We didn't receive any input. Goodbye!</Say>
-</Response>

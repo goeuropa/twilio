@@ -20,6 +20,7 @@ func NewTestManager() *LocalizationManager {
 		strings: map[string]map[string]string{
 			"en-US": {
 				"voice.welcome":                   "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key.",
+				"voice.timeout":                   "Sorry, I didn't hear anything. Please call back and try again.",
 				"voice.error.invalid_request":     "Invalid request format.",
 				"voice.error.no_stops_found":      "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
 				"voice.error.template_failed":     "Error generating response.",
@@ -34,6 +35,11 @@ func NewTestManager() *LocalizationManager {
 				"sms.error.invalid_choice":        "Please choose a number between 1 and %d.",
 				"voice.error.invalid_stop_id":     "Invalid stop ID. Please try calling again with a valid stop ID.",
 				"voice.error.invalid_choice":      "Please press a number between 1 and %d.",
+				"voice.error.no_digits":           "I didn't receive any digits. Please try calling again.",
+				"voice.error.stop_not_found":      "Sorry, I couldn't find any stops with that ID. Please check the stop ID and try again.",
+				"voice.error.no_active_session":   "No active selection. Please call again and enter a stop ID to get started.",
+				"voice.disambiguation.prompt":     "I found %d stops with ID %s.",
+				"error.internal_error":            "An internal error occurred. Please try again.",
 				"sms.menu.more_hint":              "Reply 'more' for later buses",
 				"sms.menu.help_hint":              "Reply 'help' for usage info",
 				"sms.error.invalid_stop":          "Please send a valid stop ID (e.g., 75403).",

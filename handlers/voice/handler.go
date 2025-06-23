@@ -1,7 +1,6 @@
 package voice
 
 import (
-	"log"
 	"oba-twilio/models"
 	"oba-twilio/validation"
 
@@ -16,7 +15,6 @@ import (
 type Handler struct {
 	OBAClient           client.OneBusAwayClientInterface
 	SessionStore        *common.SessionStore
-	TemplateManager     *TemplateManager
 	LocalizationManager *localization.LocalizationManager
 	ErrorHandler        *common.ErrorHandler
 	analyticsManager    middleware.AnalyticsManager
@@ -24,15 +22,9 @@ type Handler struct {
 }
 
 func NewHandler(obaClient client.OneBusAwayClientInterface, locManager *localization.LocalizationManager) *Handler {
-	templateManager, err := NewTemplateManager()
-	if err != nil {
-		log.Fatalf("Failed to initialize voice template manager: %v", err)
-	}
-
 	return &Handler{
 		OBAClient:           obaClient,
 		SessionStore:        common.NewSessionStore(),
-		TemplateManager:     templateManager,
 		LocalizationManager: locManager,
 		ErrorHandler:        common.NewErrorHandler(locManager),
 	}

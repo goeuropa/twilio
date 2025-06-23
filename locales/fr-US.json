@@ -25,8 +25,11 @@
   "sms.no_arrivals": "Aucune arrivée prochaine trouvée pour cet arrêt.",
   "sms.service_unavailable": "Le service OneBusAway est temporairement indisponible. Veuillez réessayer.",
   "sms.error.invalid_choice": "Veuillez choisir un numéro entre 1 et %d.",
-  "voice.error.invalid_stop_id": "ID d'arrêt invalide. Veuillez réessayer avec un ID d'arrêt valide."
-  "voice.error.invalid_choice": "Veuillez appuyer sur un numéro entre 1 et %d."
+  "voice.error.invalid_stop_id": "ID d'arrêt invalide. Veuillez réessayer avec un ID d'arrêt valide.",
+  "voice.error.invalid_choice": "Veuillez appuyer sur un numéro entre 1 et %d.",
+  "voice.error.no_digits": "Je n'ai reçu aucun chiffre. Veuillez rappeler.",
+  "voice.error.stop_not_found": "Désolé, je n'ai trouvé aucun arrêt avec cet ID. Veuillez vérifier l'ID de l'arrêt et réessayer.",
+  "voice.error.no_active_session": "Aucune sélection active. Veuillez rappeler et entrer un ID d'arrêt pour commencer.",
   "sms.help": "Envoyez un ID d'arrêt (ex. 75403) pour obtenir les arrivées. Répondez 'more' pour les bus suivants, 'help' pour ce message.",
   "sms.menu.more_hint": "Répondez 'more' pour les bus suivants",
   "sms.menu.new_hint": "Répondez 'new' pour un arrêt différent",

@@ -326,7 +326,7 @@ func TestVoiceHandler_MenuActionReturnToMainMenu(t *testing.T) {
 	// Should return to start menu
 	assert.Contains(t, body, "Welcome to OneBusAway")
 	assert.Contains(t, body, "enter your stop ID")
-	assert.Contains(t, body, "action=\"/voice/find_stop\"")
+	assert.Contains(t, body, "action=\"/voice/find_stop?lang=en-US\"")
 
 	// Verify session was cleared
 	clearedSession := voiceHandler.SessionStore.GetVoiceSession("+14444444444")
@@ -358,7 +358,7 @@ func TestVoiceHandler_MenuActionInvalidChoice(t *testing.T) {
 	body := w.Body.String()
 
 	// Should contain error message
-	assert.Contains(t, body, "Please press 1 or 2")
+	assert.Contains(t, body, "Please press a number between 1 and 2")
 }
 
 func TestVoiceHandler_MenuActionNoSession(t *testing.T) {
@@ -591,7 +591,7 @@ func TestVoiceHandler_MenuActionMissingQueryParameter(t *testing.T) {
 	body := w.Body.String()
 
 	// Should contain error message
-	assert.Contains(t, body, "Sorry, there was an error processing your request")
+	assert.Contains(t, body, "An internal error occurred. Please try again")
 
 	// Should NOT contain arrivals data or menu options
 	assert.NotContains(t, body, "<Gather")
@@ -695,8 +695,8 @@ func TestVoiceHandler_StopNameRetrievalInResponse(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
 
-	// Verify that the response contains the stop name, not the stop ID
-	assert.Contains(t, body, "Pine St & 5th Ave", "Response should contain human-readable stop name")
+	// Verify that the response contains the stop name, not the stop ID (XML-escaped)
+	assert.Contains(t, body, "Pine St &amp; 5th Ave", "Response should contain human-readable stop name")
 	assert.NotContains(t, body, "1_12345", "Response should not contain technical stop ID")
 
 	mockClient.AssertExpectations(t)
