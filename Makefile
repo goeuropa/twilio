@@ -25,7 +25,9 @@ test-short:
 
 # Run tests with coverage
 test-coverage:
-	go test -cover ./...
+	mkdir -p coverage
+	go test -v ./... -covermode=count -coverpkg=./... -coverprofile coverage/coverage.out
+	go tool cover -html coverage.out -o coverage/coverage.html
 
 # Run tests with verbose output
 test-verbose:
