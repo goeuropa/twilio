@@ -19,6 +19,13 @@ func NewTestManager() *LocalizationManager {
 	return &LocalizationManager{
 		strings: map[string]map[string]string{
 			"en-US": {
+				// Generic keys used by health checks
+				"welcome": "Welcome",
+				"error":   "An error occurred",
+				"help":    "Help information",
+				"goodbye": "Goodbye",
+
+				// Voice prompts
 				"voice.welcome":                   "Welcome to OneBusAway transit information. Please enter your stop ID followed by the pound key.",
 				"voice.timeout":                   "Sorry, I didn't hear anything. Please call back and try again.",
 				"voice.error.invalid_request":     "Invalid request format.",
