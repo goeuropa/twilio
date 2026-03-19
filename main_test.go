@@ -220,7 +220,8 @@ func TestSMSHandler_InvalidStopID(t *testing.T) {
 	form := url.Values{}
 	form.Set("From", "+14444444444")
 	form.Set("To", "+15555555555")
-	form.Set("Body", "invalid")
+	// Use a value that fails ValidateStopID (invalid character '@')
+	form.Set("Body", "inv@lid")
 	form.Set("MessageSid", "test-message-sid")
 
 	w := httptest.NewRecorder()
@@ -364,7 +365,8 @@ func TestTwiMLGeneration(t *testing.T) {
 	form := url.Values{}
 	form.Set("From", "+14444444444")
 	form.Set("To", "+15555555555")
-	form.Set("Body", "abc")
+	// Use a value that fails ValidateStopID to avoid stop lookup mocking
+	form.Set("Body", "a-b")
 	form.Set("MessageSid", "test-message-sid")
 
 	w := httptest.NewRecorder()

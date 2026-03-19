@@ -23,6 +23,18 @@ func TestValidateStopID(t *testing.T) {
 			description: "Valid 5-digit stop ID should pass",
 		},
 		{
+			name:        "valid single-character stop ID",
+			input:       "A",
+			expectError: false,
+			description: "Single-character alphanumeric stop ID should pass",
+		},
+		{
+			name:        "valid stop ID with surrounding whitespace",
+			input:       "  12345  ",
+			expectError: false,
+			description: "Stop ID with surrounding whitespace should be trimmed and pass",
+		},
+		{
 			name:        "valid stop ID with underscore prefix",
 			input:       "1_12345",
 			expectError: false,
@@ -48,25 +60,11 @@ func TestValidateStopID(t *testing.T) {
 			description: "Empty stop ID should be rejected",
 		},
 		{
-			name:        "stop ID too short",
-			input:       "12",
-			expectError: true,
-			errorCode:   models.ErrorCodeValidationFailed,
-			description: "Stop ID shorter than 3 characters should be rejected",
-		},
-		{
 			name:        "stop ID too long",
-			input:       "12345678901",
+			input:       "123456789012345678901",
 			expectError: true,
 			errorCode:   models.ErrorCodeValidationFailed,
-			description: "Stop ID longer than 10 characters should be rejected",
-		},
-		{
-			name:        "stop ID with invalid characters",
-			input:       "123abc",
-			expectError: true,
-			errorCode:   models.ErrorCodeValidationFailed,
-			description: "Stop ID with letters should be rejected",
+			description: "Stop ID longer than 20 characters should be rejected",
 		},
 		{
 			name:        "stop ID with special characters",

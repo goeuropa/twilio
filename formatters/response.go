@@ -163,18 +163,9 @@ func ExtractStopID(message string) string {
 		return ""
 	}
 
-	stopID := fields[0]
-
-	if len(stopID) >= 3 && len(stopID) <= 10 {
-		for _, char := range stopID {
-			if char < '0' || char > '9' {
-				return ""
-			}
-		}
-		return stopID
-	}
-
-	return ""
+	// For stop ID extraction we now trust the first token and let
+	// validation.ValidateStopID enforce the detailed rules (length, charset, security).
+	return fields[0]
 }
 
 func IsDisambiguationChoice(message string) int {

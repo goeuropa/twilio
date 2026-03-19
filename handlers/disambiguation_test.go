@@ -338,7 +338,9 @@ func TestSMSHandler_DisambiguationChoice_Invalid(t *testing.T) {
 }
 
 func TestSMSHandler_DisambiguationChoice_NoSession(t *testing.T) {
-	r, _, _ := setupDisambiguationTestRouter()
+	r, mockClient, _ := setupDisambiguationTestRouter()
+
+	mockClient.On("FindAllMatchingStops", "1").Return([]models.StopOption{}, nil)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -350,7 +352,8 @@ func TestSMSHandler_DisambiguationChoice_NoSession(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "No active selection")
+	assert.Contains(t, w.Body.String(), "Sorry, no stops found with ID 1")
+	mockClient.AssertExpectations(t)
 }
 
 func TestSessionStore_SetAndGet(t *testing.T) {

@@ -132,8 +132,10 @@ func (cb *CircuitBreaker) recordFailure() {
 // getDefaultConfig returns the default configuration with standard agency priorities
 func getDefaultConfig() *ClientConfig {
 	return &ClientConfig{
-		AgencyPriority:  []string{"1", "40", "29", "95", "97", "98", "3", "23"},
-		DefaultAgencies: []string{"1", "40", "29", "95", "97", "98", "3", "23"},
+		// Include common Puget Sound agency IDs first (Metro, Sound Transit, Pierce Transit),
+		// then fall back to the broader default list.
+		AgencyPriority:  []string{"1", "40", "29", "2", "4", "5", "6", "7", "3", "9"},
+		DefaultAgencies: []string{"1", "40", "29", "2", "4", "5", "6", "7", "3", "9"},
 	}
 }
 

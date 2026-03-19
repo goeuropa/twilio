@@ -158,14 +158,11 @@ func TestExtractStopID(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"Valid stop ID", "75403", "75403"},
+		{"Valid numeric ID", "75403", "75403"},
 		{"Valid with spaces", " 75403 ", "75403"},
-		{"Valid short ID", "123", "123"},
-		{"Valid long ID", "1234567890", "1234567890"},
-		{"Invalid too short", "12", ""},
-		{"Invalid too long", "12345678901", ""},
-		{"Invalid with letters", "75403a", ""},
-		{"Invalid with text", "stop 75403", ""},
+		{"Valid alphanumeric ID", "sw44", "sw44"},
+		{"Valid single-character ID", "A", "A"},
+		{"Valid first token from text", "sw44 other text", "sw44"},
 		{"Empty string", "", ""},
 		{"Only spaces", "   ", ""},
 	}

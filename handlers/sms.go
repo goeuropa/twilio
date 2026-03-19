@@ -90,9 +90,10 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 		return
 	}
 
-	// Check if user is responding to a disambiguation request
+	// Check if user is responding to a disambiguation request.
+	// Treat short numeric messages (e.g. "1") as a choice only when there is an active
+	// disambiguation session for this sender and the choice is within the valid range.
 	if choice := formatters.IsDisambiguationChoice(req.Body); choice > 0 {
-		// Additional validation for the choice
 		session := h.SessionStore.GetDisambiguationSession(req.From)
 		if session != nil {
 			if err := validation.ValidateDisambiguationChoice(req.Body, len(session.StopOptions)); err != nil {
@@ -102,9 +103,10 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 				c.String(http.StatusOK, twiml)
 				return
 			}
+			h.handleDisambiguationChoice(c, req, choice)
+			return
 		}
-		h.handleDisambiguationChoice(c, req, choice)
-		return
+		// No active session: fall through and treat as a stop query.
 	}
 
 	// Clear any existing disambiguation session for new queries

@@ -249,7 +249,8 @@ func TestSMSHandler_EmptyBody(t *testing.T) {
 func TestSMSHandler_InvalidStopID(t *testing.T) {
 	r, _, _ := setupSMSTestRouter()
 
-	w := sendSMSRequest(r, "+12345678901", "abc123")
+	// Use a string that fails ValidateStopID (invalid character '-')
+	w := sendSMSRequest(r, "+12345678901", "abc-123")
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
@@ -377,13 +378,18 @@ func TestSMSHandler_NewKeyword(t *testing.T) {
 }
 
 func TestSMSHandler_InvalidKeyword(t *testing.T) {
-	r, _, _ := setupSMSTestRouter()
+	r, mockClient, _ := setupSMSTestRouter()
+
+	// With relaxed stop ID parsing, an unrecognized keyword falls back to stop lookup.
+	// Mock the lookup to return no stops.
+	mockClient.On("FindAllMatchingStops", "invalid").Return([]models.StopOption{}, nil)
 
 	w := sendSMSRequest(r, "+12345678901", "invalid")
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, "Please send a valid stop ID")
+	assert.Contains(t, body, "Sorry, no stops found with ID invalid")
+	mockClient.AssertExpectations(t)
 }
 
 // Time Parsing Tests
