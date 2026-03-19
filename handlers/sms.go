@@ -374,6 +374,7 @@ func (h *SMSHandler) handleLanguageSwitching(c *gin.Context, req models.TwilioSM
 		"french":   "fr-US",
 		"deutsch":  "de-US",
 		"german":   "de-US",
+		"polish":   "pl",
 	}
 
 	if newLang, found := languageMap[message]; found && h.LocalizationManager.IsSupported(newLang) {
