@@ -405,8 +405,39 @@ func TestFindAllMatchingStops_SingleMatch(t *testing.T) {
 		Text: "OK",
 	}
 
+	mockCoverageResp := models.AgenciesWithCoverageResponse{
+		Data: struct {
+			LimitExceeded bool `json:"limitExceeded"`
+			List          []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			} `json:"list"`
+		}{
+			LimitExceeded: false,
+			List: []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			}{
+				{AgencyID: "1", Lat: 47.6062, LatSpan: 0.5, Lon: -122.3321, LonSpan: 0.8},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
+		if strings.Contains(r.URL.Path, "/api/where/agencies-with-coverage.json") {
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(mockCoverageResp); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		} else if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(mockStopResp); err != nil {
 				t.Errorf("Failed to encode response: %v", err)
@@ -418,6 +449,9 @@ func TestFindAllMatchingStops_SingleMatch(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
+
+	err := client.InitializeCoverage()
+	assert.NoError(t, err)
 
 	stops, err := client.FindAllMatchingStops("12345")
 	assert.NoError(t, err)
@@ -534,8 +568,40 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 		Text: "OK",
 	}
 
+	mockCoverageResp := models.AgenciesWithCoverageResponse{
+		Data: struct {
+			LimitExceeded bool `json:"limitExceeded"`
+			List          []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			} `json:"list"`
+		}{
+			LimitExceeded: false,
+			List: []struct {
+				AgencyID string  `json:"agencyId"`
+				Lat      float64 `json:"lat"`
+				LatSpan  float64 `json:"latSpan"`
+				Lon      float64 `json:"lon"`
+				LonSpan  float64 `json:"lonSpan"`
+			}{
+				{AgencyID: "1", Lat: 47.6062, LatSpan: 0.5, Lon: -122.3321, LonSpan: 0.8},
+				{AgencyID: "40", Lat: 47.5, LatSpan: 0.3, Lon: -122.2, LonSpan: 0.4},
+			},
+		},
+		Code: 200,
+		Text: "OK",
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
+		if strings.Contains(r.URL.Path, "/api/where/agencies-with-coverage.json") {
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(mockCoverageResp); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		} else if strings.Contains(r.URL.Path, "/api/where/stop/1_12345.json") {
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(mockStopResp1); err != nil {
 				t.Errorf("Failed to encode response: %v", err)
@@ -552,6 +618,9 @@ func TestFindAllMatchingStops_MultipleMatches(t *testing.T) {
 	defer server.Close()
 
 	client := NewOneBusAwayClient(server.URL, "test-key")
+
+	err := client.InitializeCoverage()
+	assert.NoError(t, err)
 
 	stops, err := client.FindAllMatchingStops("12345")
 	assert.NoError(t, err)

@@ -32,6 +32,10 @@ const (
 	// coverageCacheTTLMinutes defines how long to cache coverage data (longer as it changes infrequently)
 	coverageCacheTTLMinutes = 60
 
+	// agenciesCacheTTLMinutes defines how long to cache agency IDs used for stop searching
+	// (we refresh once per day as requested).
+	agenciesCacheTTLMinutes = 24 * 60
+
 	// maxCacheEntries limits the number of cached responses
 	maxCacheEntries = 1000
 
@@ -39,6 +43,10 @@ const (
 	circuitBreakerFailureThreshold = 5
 	circuitBreakerTimeout          = 60 * time.Second
 	circuitBreakerRetryTimeout     = 30 * time.Second
+)
+
+const (
+	coverageAgencyIDsCacheKey = "coverage_agency_ids"
 )
 
 // ClientConfig holds configuration for the OneBusAway client
@@ -419,6 +427,112 @@ func (c *OneBusAwayClient) getAgencyList() []string {
 	return c.config.DefaultAgencies
 }
 
+// ensureAgencyIDsForSearch refreshes the agency ID list used by FindAllMatchingStops.
+// It is cached for ~1 day and sourced from the OneBusAway agencies-with-coverage endpoint.
+func (c *OneBusAwayClient) ensureAgencyIDsForSearch() error {
+	// 1) Fast path: valid cache
+	if cached, found := c.cache.Get(coverageAgencyIDsCacheKey); found {
+		if ids, ok := cached.([]string); ok && len(ids) > 0 {
+			c.config.AgencyPriority = ids
+			return nil
+		}
+	}
+
+	// 2) Graceful degradation: expired cached data
+	if cachedData, found, _ := c.cache.GetExpired(coverageAgencyIDsCacheKey); found {
+		if ids, ok := cachedData.([]string); ok && len(ids) > 0 {
+			// Keep searching with stale-but-available IDs.
+			c.config.AgencyPriority = ids
+			return fmt.Errorf("using cached agencies-with-coverage data due to cache refresh failure")
+		}
+	}
+
+	// 3) Fetch from API
+	endpoint := fmt.Sprintf("%s/api/where/agencies-with-coverage.json", c.BaseURL)
+
+	var coverageResp models.AgenciesWithCoverageResponse
+	startTime := time.Now()
+
+	err := c.circuitBreaker.Call(func() error {
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add cache-control headers
+		req.Header.Set("Cache-Control", "max-age=3600")
+		req.Header.Set("User-Agent", "oba-twilio/1.0")
+
+		q := req.URL.Query()
+		q.Add("key", c.APIKey)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&coverageResp); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return nil
+	})
+
+	responseTime := time.Since(startTime)
+
+	if err != nil {
+		c.metrics.IncrementAPIError()
+		if strings.Contains(err.Error(), "circuit breaker is open") {
+			c.metrics.IncrementCircuitBreakerOpen()
+		}
+		return err
+	}
+
+	c.metrics.IncrementAPICall(responseTime)
+
+	if coverageResp.Code != 200 {
+		return fmt.Errorf("API error: %s (code %d)", coverageResp.Text, coverageResp.Code)
+	}
+	if len(coverageResp.Data.List) == 0 {
+		return fmt.Errorf("no agencies-with-coverage agencies found")
+	}
+
+	// Extract unique agency IDs preserving API order.
+	ids := make([]string, 0, len(coverageResp.Data.List))
+	seen := make(map[string]struct{}, len(coverageResp.Data.List))
+	for _, a := range coverageResp.Data.List {
+		id := strings.TrimSpace(a.AgencyID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return fmt.Errorf("agencies-with-coverage returned no valid agency IDs")
+	}
+
+	// Apply to search ordering.
+	c.config.AgencyPriority = ids
+
+	// Cache for ~1 day.
+	c.cache.Set(coverageAgencyIDsCacheKey, ids, agenciesCacheTTLMinutes*time.Minute)
+
+	return nil
+}
+
 // SetAgencyPriority allows runtime configuration of agency priority
 func (c *OneBusAwayClient) SetAgencyPriority(agencies []string) error {
 	if c.config == nil {
@@ -454,6 +568,9 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 		if coverageArea, ok := cached.(*models.CoverageArea); ok {
 			c.metrics.IncrementCacheHits()
 			c.coverageArea = coverageArea
+			// Even if coverage areas are cached, we still need to refresh
+			// agency IDs used for stop searching once per day.
+			_ = c.ensureAgencyIDsForSearch()
 			return nil
 		}
 	}
@@ -538,6 +655,27 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 
 	if len(coverageResp.Data.List) == 0 {
 		return fmt.Errorf("no coverage areas found")
+	}
+
+	// Apply agency IDs to stop searching and cache them for ~1 day.
+	// (This reuses the agencies-with-coverage response we already fetched.)
+	agencyIDs := make([]string, 0, len(coverageResp.Data.List))
+	seen := make(map[string]struct{}, len(coverageResp.Data.List))
+	for _, a := range coverageResp.Data.List {
+		id := strings.TrimSpace(a.AgencyID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		agencyIDs = append(agencyIDs, id)
+	}
+
+	if len(agencyIDs) > 0 {
+		c.config.AgencyPriority = agencyIDs
+		c.cache.Set(coverageAgencyIDsCacheKey, agencyIDs, agenciesCacheTTLMinutes*time.Minute)
 	}
 
 	c.coverageArea = c.calculateCoverageArea(coverageResp.Data.List)
