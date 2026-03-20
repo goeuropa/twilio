@@ -25,6 +25,7 @@ func TestSMSHandler_AlwaysSendsResponse(t *testing.T) {
 		{
 			FullStopID:  "1_75403",
 			DisplayText: "15th Ave NE & NE Campus Pkwy",
+			StopName:    "15th Ave NE & NE Campus Pkwy",
 			AgencyName:  "Metro Transit",
 		},
 	}, nil)
@@ -59,6 +60,12 @@ func TestSMSHandler_AlwaysSendsResponse(t *testing.T) {
 	}
 
 	mockClient.On("GetArrivalsAndDepartures", "1_75403").Return(mockResponse, nil)
+
+	// "more" flow calls GetStopInfo to obtain the stop name header.
+	mockClient.On("GetStopInfo", "1_75403").Return(&models.StopOption{
+		FullStopID: "1_75403",
+		StopName:   "15th Ave NE & NE Campus Pkwy",
+	}, nil)
 	mockClient.On("ProcessArrivals", mockResponse).Return([]models.Arrival{
 		{
 			RouteShortName:      "71",

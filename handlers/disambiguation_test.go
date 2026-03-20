@@ -186,7 +186,7 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "King County Metro: Test Stop")
+	assert.Contains(t, w.Body.String(), "Stop: Test Stop")
 	assert.Contains(t, w.Body.String(), "Route 8")
 	mockClient.AssertExpectations(t)
 }
@@ -304,7 +304,7 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Sound Transit: University Street Station")
+	assert.Contains(t, w.Body.String(), "Stop: University Street Station")
 	assert.Contains(t, w.Body.String(), "Route Link")
 	mockClient.AssertExpectations(t)
 }

@@ -185,7 +185,8 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	}
 
 	// Single stop found, get arrivals directly
-	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, matchingStops[0].FullStopID, matchingStops[0].DisplayText, smsSession)
+	// For SMS "Stop:" header we want the stop name (not "Agency: Stop").
+	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, matchingStops[0].FullStopID, matchingStops[0].StopName, smsSession)
 }
 
 func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.TwilioSMSRequest, choice int) {
@@ -216,7 +217,8 @@ func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.Twili
 	// Get SMS session for this user to maintain consistency
 	smsSession := h.getOrCreateSMSSession(req.From)
 	smsSession.LastStopID = selectedStop.FullStopID
-	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, selectedStop.FullStopID, selectedStop.DisplayText, smsSession)
+	// For SMS "Stop:" header we want the stop name (not "Agency: Stop").
+	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, selectedStop.FullStopID, selectedStop.StopName, smsSession)
 }
 
 func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, phoneNumber string, fullStopID string, stopDisplayName string, session *models.SMSSession) {
@@ -242,9 +244,14 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp)
 
-	// Use stop name from response if display name is empty
-	if stopDisplayName == "" && obaResp.Data.Entry.StopId != "" {
-		stopDisplayName = obaResp.Data.Entry.StopId // This should be improved to get actual stop name
+	// If we don't have a display name yet, try fetching stop info to obtain the stop name.
+	if stopDisplayName == "" {
+		if stopInfo, err := h.OBAClient.GetStopInfo(fullStopID); err == nil && stopInfo != nil && stopInfo.StopName != "" {
+			stopDisplayName = stopInfo.StopName
+		} else if obaResp.Data.Entry.StopId != "" {
+			// Last resort: fall back to stop ID (works even if name can't be resolved).
+			stopDisplayName = obaResp.Data.Entry.StopId
+		}
 	}
 
 	message := formatters.FormatSMSResponse(arrivals, stopDisplayName)
