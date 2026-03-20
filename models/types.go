@@ -106,5 +106,9 @@ type SMSSession struct {
 	Language      string `json:"language"`
 	LastQueryTime int64  `json:"lastQueryTime"`
 	WindowMinutes int    `json:"windowMinutes"`
-	CreatedAt     int64  `json:"createdAt"`
+	// ArrivalHorizonShownMinutes is the inclusive minutes-from-now horizon already covered
+	// in the last SMS. Used so "more" can show the next slice (beyond what was already listed).
+	// 0 means the last reply was not a continuation (show the full 0..window slice).
+	ArrivalHorizonShownMinutes int `json:"arrivalHorizonShownMinutes"`
+	CreatedAt                  int64 `json:"createdAt"`
 }

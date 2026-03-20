@@ -303,7 +303,7 @@ func (h *Handler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phoneNumb
 		return
 	}
 
-	arrivals := h.OBAClient.ProcessArrivals(obaResp)
+	arrivals := h.OBAClient.ProcessArrivals(obaResp, window)
 
 	// Get the human-readable stop name instead of using the technical stop ID
 	stopName := ""

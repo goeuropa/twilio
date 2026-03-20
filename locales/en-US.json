@@ -24,6 +24,7 @@
   "voice.arrival.no_arrivals": "No upcoming arrivals found for this stop.",
   "sms.no_stops_found": "Sorry, no stops found with ID %s. Please check and try again.",
   "sms.no_arrivals": "No upcoming arrivals found for this stop.",
+  "sms.more.no_additional": "No additional buses in this time range. Try 'more' again later or send a new stop ID.",
   "sms.service_unavailable": "OneBusAway service is temporarily unavailable. Please try again.",
   "sms.error.invalid_choice": "Please choose a number between 1 and %d.",
   "voice.error.invalid_stop_id": "Invalid stop ID. Please try calling again with a valid stop ID.",

@@ -47,8 +47,8 @@ func (m *MockOneBusAwayClientVoiceMenu) GetArrivalsAndDeparturesWithWindow(stopI
 	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
 }
 
-func (m *MockOneBusAwayClientVoiceMenu) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
-	args := m.Called(resp)
+func (m *MockOneBusAwayClientVoiceMenu) ProcessArrivals(resp *models.OneBusAwayResponse, maxMinutes int) []models.Arrival {
+	args := m.Called(resp, maxMinutes)
 	result := args.Get(0)
 	if result == nil {
 		return nil
@@ -178,7 +178,7 @@ func TestVoiceHandler_FindStopWithMenuOptions(t *testing.T) {
 
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(&mockStopOptions[0], nil)
 
 	form := url.Values{}
@@ -264,7 +264,7 @@ func TestVoiceHandler_MenuActionExtendDepartures(t *testing.T) {
 
 	// Should call with extended window (30 minutes)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
 		FullStopID: "1_12345",
 		StopName:   "Test Stop",
@@ -432,7 +432,7 @@ func TestVoiceHandler_ExtendedDeparturesMultipleTimes(t *testing.T) {
 
 	// Should call with further extended window (60 + 30 = 90 minutes)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
 		FullStopID: "1_12345",
 		StopName:   "Test Stop",
@@ -530,7 +530,7 @@ func TestVoiceHandler_MenuActionWithQueryParameter(t *testing.T) {
 
 	// Should use the query parameter value (90) instead of session value + 30
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 90).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(&models.StopOption{
 		FullStopID: "1_12345",
 		StopName:   "Test Stop",
@@ -680,7 +680,7 @@ func TestVoiceHandler_StopNameRetrievalInResponse(t *testing.T) {
 	// Set up expectations
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockMatchingStops, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(mockStopInfo, nil)
 
 	form := url.Values{}
@@ -774,7 +774,7 @@ func TestVoiceHandler_StopNameRetrievalFailure(t *testing.T) {
 	// Set up expectations - GetStopInfo fails
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockMatchingStops, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(nil, fmt.Errorf("stop not found"))
 
 	form := url.Values{}

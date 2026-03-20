@@ -45,8 +45,8 @@ func (m *MockOneBusAwayClientDisambiguation) GetArrivalsAndDeparturesWithWindow(
 	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
 }
 
-func (m *MockOneBusAwayClientDisambiguation) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
-	args := m.Called(resp)
+func (m *MockOneBusAwayClientDisambiguation) ProcessArrivals(resp *models.OneBusAwayResponse, maxMinutes int) []models.Arrival {
+	args := m.Called(resp, maxMinutes)
 	result := args.Get(0)
 	if result == nil {
 		return nil
@@ -173,8 +173,8 @@ func TestSMSHandler_SingleStopFound(t *testing.T) {
 	}
 
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
-	mockClient.On("GetArrivalsAndDepartures", "1_12345").Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse, 30).Return(mockArrivals)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -291,8 +291,8 @@ func TestSMSHandler_DisambiguationChoice_Valid(t *testing.T) {
 		},
 	}
 
-	mockClient.On("GetArrivalsAndDepartures", "40_12345").Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "40_12345", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse, 30).Return(mockArrivals)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")

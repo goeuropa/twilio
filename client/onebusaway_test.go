@@ -223,7 +223,7 @@ func TestProcessArrivals(t *testing.T) {
 		},
 	}
 
-	arrivals := client.ProcessArrivals(mockResponse)
+	arrivals := client.ProcessArrivals(mockResponse, 60)
 
 	assert.Len(t, arrivals, 1)
 	assert.Equal(t, "8", arrivals[0].RouteShortName)

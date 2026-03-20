@@ -124,6 +124,7 @@ func (h *SMSHandler) HandleSMS(c *gin.Context) {
 	// Update SMS session with current language and stop
 	smsSession.Language = language
 	smsSession.LastStopID = stopID
+	smsSession.ArrivalHorizonShownMinutes = 0 // new stop query — show nearest slice from scratch
 	smsSession.LastQueryTime = time.Now().Unix()
 	if err := h.SessionStore.SetSMSSession(req.From, smsSession); err != nil {
 		log.Printf("Failed to set SMS session for %s: %v", req.From, err)
@@ -217,6 +218,7 @@ func (h *SMSHandler) handleDisambiguationChoice(c *gin.Context, req models.Twili
 	// Get SMS session for this user to maintain consistency
 	smsSession := h.getOrCreateSMSSession(req.From)
 	smsSession.LastStopID = selectedStop.FullStopID
+	smsSession.ArrivalHorizonShownMinutes = 0
 	// For SMS "Stop:" header we want the stop name (not "Agency: Stop").
 	h.getAndFormatArrivalsWithStopNameAndSession(c, req.From, selectedStop.FullStopID, selectedStop.StopName, smsSession)
 }
@@ -231,18 +233,23 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		window = 30
 	}
 
-	// Get arrivals with specified window (use default method if window is 30)
-	if window == 30 {
-		obaResp, err = h.OBAClient.GetArrivalsAndDepartures(fullStopID)
-	} else {
-		obaResp, err = h.OBAClient.GetArrivalsAndDeparturesWithWindow(fullStopID, window)
-	}
+	obaResp, err = h.OBAClient.GetArrivalsAndDeparturesWithWindow(fullStopID, window)
 	if err != nil {
 		h.ErrorHandler.HandleSMSError(c, err, session.Language)
 		return
 	}
 
-	arrivals := h.OBAClient.ProcessArrivals(obaResp)
+	arrivalsAll := h.OBAClient.ProcessArrivals(obaResp, window)
+	var arrivals []models.Arrival
+	if session.ArrivalHorizonShownMinutes > 0 {
+		for _, a := range arrivalsAll {
+			if a.MinutesUntilArrival > session.ArrivalHorizonShownMinutes {
+				arrivals = append(arrivals, a)
+			}
+		}
+	} else {
+		arrivals = arrivalsAll
+	}
 
 	// If we don't have a display name yet, try fetching stop info to obtain the stop name.
 	if stopDisplayName == "" {
@@ -254,7 +261,16 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		}
 	}
 
-	message := formatters.FormatSMSResponse(arrivals, stopDisplayName)
+	var message string
+	if len(arrivals) == 0 {
+		if session.ArrivalHorizonShownMinutes > 0 {
+			message = h.LocalizationManager.GetString("sms.more.no_additional", session.Language)
+		} else {
+			message = formatters.FormatSMSResponse(arrivals, stopDisplayName)
+		}
+	} else {
+		message = formatters.FormatSMSResponse(arrivals, stopDisplayName)
+	}
 
 	// Add menu hints if there are arrivals
 	if len(arrivals) > 0 {
@@ -274,6 +290,7 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 	newSession := *session
 	newSession.LastStopID = fullStopID
 	newSession.LastQueryTime = time.Now().Unix()
+	newSession.ArrivalHorizonShownMinutes = window
 	if err := h.SessionStore.SetSMSSession(phoneNumber, &newSession); err != nil {
 		// Log error but still send the response
 		log.Printf("Failed to set SMS session for %s: %v", phoneNumber, err)
@@ -432,6 +449,7 @@ func (h *SMSHandler) handleTimeQuery(c *gin.Context, req models.TwilioSMSRequest
 		// Update session atomically
 		updatedSession := *session
 		updatedSession.WindowMinutes = newWindow
+		updatedSession.ArrivalHorizonShownMinutes = 0 // explicit window change — full slice for that window
 		updatedSession.LastQueryTime = time.Now().Unix()
 		if err := h.SessionStore.SetSMSSession(req.From, &updatedSession); err != nil {
 			// Log error but continue to send response

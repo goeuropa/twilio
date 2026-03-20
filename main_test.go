@@ -47,8 +47,8 @@ func (m *MockOneBusAwayClient) GetArrivalsAndDeparturesWithWindow(stopID string,
 	return nil, fmt.Errorf("mock returned invalid type for GetArrivalsAndDeparturesWithWindow")
 }
 
-func (m *MockOneBusAwayClient) ProcessArrivals(resp *models.OneBusAwayResponse) []models.Arrival {
-	args := m.Called(resp)
+func (m *MockOneBusAwayClient) ProcessArrivals(resp *models.OneBusAwayResponse, maxMinutes int) []models.Arrival {
+	args := m.Called(resp, maxMinutes)
 	result := args.Get(0)
 	if result == nil {
 		return nil
@@ -192,8 +192,8 @@ func TestSMSHandler_ValidStopID(t *testing.T) {
 	}
 
 	mockClient.On("FindAllMatchingStops", "75403").Return(mockStopOptions, nil)
-	mockClient.On("GetArrivalsAndDepartures", "1_75403").Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_75403", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse, 30).Return(mockArrivals)
 
 	form := url.Values{}
 	form.Set("From", "+14444444444")
@@ -302,7 +302,7 @@ func TestVoiceHandler_Input(t *testing.T) {
 
 	mockClient.On("FindAllMatchingStops", "12345").Return(mockStopOptions, nil)
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_12345", 30).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse).Return(mockArrivals)
+	mockClient.On("ProcessArrivals", mockResponse, 30).Return(mockArrivals)
 	mockClient.On("GetStopInfo", "1_12345").Return(&mockStopOptions[0], nil)
 
 	form := url.Values{}

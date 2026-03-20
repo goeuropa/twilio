@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -427,6 +428,15 @@ func (c *OneBusAwayClient) getAgencyList() []string {
 	return c.config.DefaultAgencies
 }
 
+// logAgencyIDsForSearch writes the agency ID list used for stop lookup (from cache or API).
+func logAgencyIDsForSearch(source string, ids []string) {
+	if len(ids) == 0 {
+		log.Printf("[OBA] agency search list (%s): <empty>", source)
+		return
+	}
+	log.Printf("[OBA] agency search list (%s, %d): %s", source, len(ids), strings.Join(ids, ", "))
+}
+
 // ensureAgencyIDsForSearch refreshes the agency ID list used by FindAllMatchingStops.
 // It is cached for ~1 day and sourced from the OneBusAway agencies-with-coverage endpoint.
 func (c *OneBusAwayClient) ensureAgencyIDsForSearch() error {
@@ -434,6 +444,7 @@ func (c *OneBusAwayClient) ensureAgencyIDsForSearch() error {
 	if cached, found := c.cache.Get(coverageAgencyIDsCacheKey); found {
 		if ids, ok := cached.([]string); ok && len(ids) > 0 {
 			c.config.AgencyPriority = ids
+			logAgencyIDsForSearch("cache hit (coverage_agency_ids)", ids)
 			return nil
 		}
 	}
@@ -443,6 +454,7 @@ func (c *OneBusAwayClient) ensureAgencyIDsForSearch() error {
 		if ids, ok := cachedData.([]string); ok && len(ids) > 0 {
 			// Keep searching with stale-but-available IDs.
 			c.config.AgencyPriority = ids
+			logAgencyIDsForSearch("cache expired (stale coverage_agency_ids)", ids)
 			return fmt.Errorf("using cached agencies-with-coverage data due to cache refresh failure")
 		}
 	}
@@ -529,6 +541,7 @@ func (c *OneBusAwayClient) ensureAgencyIDsForSearch() error {
 
 	// Cache for ~1 day.
 	c.cache.Set(coverageAgencyIDsCacheKey, ids, agenciesCacheTTLMinutes*time.Minute)
+	logAgencyIDsForSearch("API agencies-with-coverage (ensureAgencyIDsForSearch)", ids)
 
 	return nil
 }
@@ -676,6 +689,7 @@ func (c *OneBusAwayClient) InitializeCoverage() error {
 	if len(agencyIDs) > 0 {
 		c.config.AgencyPriority = agencyIDs
 		c.cache.Set(coverageAgencyIDsCacheKey, agencyIDs, agenciesCacheTTLMinutes*time.Minute)
+		logAgencyIDsForSearch("InitializeCoverage (agencies-with-coverage response)", agencyIDs)
 	}
 
 	c.coverageArea = c.calculateCoverageArea(coverageResp.Data.List)
@@ -1458,7 +1472,11 @@ func (c *OneBusAwayClient) SearchStops(query string) ([]models.Stop, error) {
 	return stops, nil
 }
 
-func (c *OneBusAwayClient) ProcessArrivals(obaResp *models.OneBusAwayResponse) []models.Arrival {
+func (c *OneBusAwayClient) ProcessArrivals(obaResp *models.OneBusAwayResponse, maxMinutesOut int) []models.Arrival {
+	if maxMinutesOut <= 0 {
+		maxMinutesOut = 120
+	}
+
 	arrivals := make([]models.Arrival, 0)
 	now := time.Now().Unix() * 1000
 
@@ -1473,7 +1491,7 @@ func (c *OneBusAwayClient) ProcessArrivals(obaResp *models.OneBusAwayResponse) [
 		}
 
 		minutesUntil := int((arrivalTime - now) / (1000 * 60))
-		if minutesUntil > 60 {
+		if minutesUntil > maxMinutesOut {
 			continue
 		}
 
