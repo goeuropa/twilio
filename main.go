@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,7 +55,11 @@ func main() {
 		log.Fatal("Failed to initialize localization manager:", err)
 	}
 
-	log.Printf("Localization initialized with languages: %s", supportedLanguages)
+	if brand := strings.TrimSpace(os.Getenv("APP_BRAND_NAME")); brand != "" {
+		locManager.SetBrandDisplayName(brand)
+	}
+
+	log.Printf("Localization initialized with languages: %s (brand: %s)", supportedLanguages, locManager.BrandDisplayName())
 
 	// Load analytics configuration
 	analyticsConfig, err := analytics.LoadConfigFromEnv()
@@ -181,7 +186,7 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		coverage := obaClient.GetCoverageArea()
 		response := gin.H{
-			"message": "OneBusAway Twilio Integration",
+			"message": locManager.BrandDisplayName() + " Twilio Integration",
 			"status":  "healthy",
 			"version": "1.0.0",
 		}
