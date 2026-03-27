@@ -46,9 +46,9 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 
 	// Check if user is responding to a disambiguation request
 	if choice := h.parseDisambiguationChoice(req.Digits); choice > 0 {
-		// Additional validation for the choice
 		session := h.SessionStore.GetDisambiguationSession(req.From)
 		if session != nil {
+			// Additional validation for the choice
 			maxChoices := len(session.StopOptions)
 			if maxChoices > 9 {
 				maxChoices = 9 // Voice interface limits to single digits
@@ -69,8 +69,7 @@ func (h *Handler) HandleFindStop(c *gin.Context) {
 				return
 			}
 		}
-		h.handleVoiceDisambiguationChoice(c, req, choice)
-		return
+		// No active disambiguation session: treat single-digit input as regular stop ID.
 	}
 
 	// Clear any existing disambiguation session for new queries

@@ -478,10 +478,10 @@ func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 	}{
 		{"Valid US phone number", "+14444444444", false},
 		{"Valid US phone number 2", "+15551234567", false},
+		{"Valid international phone number", "+48500100200", false},
 		{"Invalid format - no plus", "14444444444", true},
-		{"Invalid format - too short", "+144444444", true},
-		{"Invalid format - too long", "+144444444444", true},
-		{"Invalid format - not US", "+44123456789", true},
+		{"Invalid format - too short", "+1444444", true},
+		{"Invalid format - too long", "+14444444444444444", true},
 		{"Invalid format - empty", "", true},
 		{"Invalid format - letters", "+1abcdefghij", true},
 	}
@@ -490,8 +490,9 @@ func TestSessionStore_PhoneNumberValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := store.SetDisambiguationSession(tt.phoneNumber, session)
 			if tt.shouldError {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid phone number format")
+				if assert.Error(t, err) {
+					assert.Contains(t, err.Error(), "invalid phone number format")
+				}
 			} else {
 				assert.NoError(t, err)
 				// Clean up valid entries

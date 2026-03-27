@@ -208,6 +208,77 @@ func TestVoiceHandler_FindStopWithMenuOptions(t *testing.T) {
 	mockClient.AssertExpectations(t)
 }
 
+func TestVoiceHandler_SingleDigitWithoutDisambiguationSession_TreatedAsStopID(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	mockStopOptions := []models.StopOption{
+		{
+			FullStopID:  "1_1",
+			AgencyName:  "King County Metro",
+			StopName:    "Test Stop 1",
+			DisplayText: "King County Metro: Test Stop 1",
+		},
+	}
+
+	mockResponse := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				StopId: "1_1",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Downtown",
+			MinutesUntilArrival: 5,
+		},
+	}
+
+	mockClient.On("FindAllMatchingStops", "1").Return(mockStopOptions, nil)
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_1", 30).Return(mockResponse, nil)
+	mockClient.On("ProcessArrivals", mockResponse, mock.Anything).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "1_1").Return(&mockStopOptions[0], nil)
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "1")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "Route 8")
+	assert.NotContains(t, body, "No active selection")
+
+	mockClient.AssertExpectations(t)
+}
+
 func TestVoiceHandler_MenuActionExtendDepartures(t *testing.T) {
 	r, mockClient, voiceHandler := setupVoiceMenuTestRouter()
 
