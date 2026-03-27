@@ -56,12 +56,12 @@ func TestFormatSMSResponse_Empty(t *testing.T) {
 func TestFormatSMSResponse_PolishLocalization(t *testing.T) {
 	lm := localization.NewTestManagerWithStrings(
 		map[string]map[string]string{
-			"pl": {
+			"pl-PL": {
 				"sms.arrival.stop_label": "Przystanek",
 				"sms.arrival.route_to":   "Linia %s do %s: %s",
 			},
 		},
-		[]string{"pl"},
+		[]string{"pl-PL"},
 	)
 	arrivals := []models.Arrival{
 		{
@@ -71,7 +71,7 @@ func TestFormatSMSResponse_PolishLocalization(t *testing.T) {
 		},
 	}
 
-	result := FormatSMSResponse(arrivals, "Franowo", lm, "pl")
+	result := FormatSMSResponse(arrivals, "Franowo", lm, "pl-PL")
 	assert.Contains(t, result, "Przystanek: Franowo")
 	assert.Contains(t, result, "Linia 1 do Franowo: 2 min")
 }

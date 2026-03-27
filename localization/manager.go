@@ -200,7 +200,7 @@ func (lm *LocalizationManager) GetLanguageDisplayName(language string) string {
 		"zh-CN": "中文",
 		"fr-US": "Français",
 		"de-US": "Deutsch",
-		"pl":    "Polski",
+		"pl-PL": "Polski",
 		"pt-US": "Português",
 		"ru-US": "Русский",
 		"ar-US": "العربية",
