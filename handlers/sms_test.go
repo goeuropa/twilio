@@ -330,7 +330,7 @@ func TestSMSHandler_MoreKeyword_WithSession(t *testing.T) {
 
 	// "more" query with extended window
 	mockClient.On("GetArrivalsAndDeparturesWithWindow", "1_75403", 60).Return(mockResponse, nil)
-	mockClient.On("ProcessArrivals", mockResponse, 60).Return(createMockArrivalsLaterChunk())
+	mockClient.On("ProcessArrivals", mockResponse, 60).Return(append(createMockArrivals(), createMockArrivalsLaterChunk()...))
 	// "more" flow calls GetStopInfo to obtain the stop name header
 	mockClient.On("GetStopInfo", "1_75403").Return(&models.StopOption{FullStopID: "1_75403", StopName: "Pine St & 3rd Ave"}, nil)
 

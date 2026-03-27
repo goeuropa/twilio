@@ -20,6 +20,8 @@ import (
 	"oba-twilio/validation"
 )
 
+const smsPageSize = 3
+
 // Pre-compiled regex patterns for performance
 var (
 	timeRegex     = regexp.MustCompile(`^\+(\d+)$`)
@@ -240,16 +242,31 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 	}
 
 	arrivalsAll := h.OBAClient.ProcessArrivals(obaResp, window)
-	var arrivals []models.Arrival
-	if session.ArrivalHorizonShownMinutes > 0 {
-		for _, a := range arrivalsAll {
-			if a.MinutesUntilArrival > session.ArrivalHorizonShownMinutes {
-				arrivals = append(arrivals, a)
-			}
-		}
-	} else {
-		arrivals = arrivalsAll
+
+	// Use paged continuation for SMS: "more" returns the next chunk, not an arbitrary time jump.
+	// ArrivalHorizonShownMinutes stores how many arrivals were already shown in this session.
+	offset := session.ArrivalHorizonShownMinutes
+	if offset < 0 {
+		offset = 0
 	}
+	if offset > len(arrivalsAll) {
+		offset = len(arrivalsAll)
+	}
+
+	arrivals := arrivalsAll[offset:]
+	if len(arrivals) > smsPageSize {
+		arrivals = arrivals[:smsPageSize]
+	}
+	log.Printf(
+		"SMS pagination for %s: stop=%s window=%d total_arrivals=%d offset=%d page_size=%d returned=%d",
+		phoneNumber,
+		fullStopID,
+		window,
+		len(arrivalsAll),
+		offset,
+		smsPageSize,
+		len(arrivals),
+	)
 
 	// If we don't have a display name yet, try fetching stop info to obtain the stop name.
 	if stopDisplayName == "" {
@@ -263,7 +280,7 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 
 	var message string
 	if len(arrivals) == 0 {
-		if session.ArrivalHorizonShownMinutes > 0 {
+		if offset > 0 {
 			message = h.LocalizationManager.GetString("sms.more.no_additional", session.Language)
 		} else {
 			message = formatters.FormatSMSResponse(arrivals, stopDisplayName, h.LocalizationManager, session.Language)
@@ -290,7 +307,7 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 	newSession := *session
 	newSession.LastStopID = fullStopID
 	newSession.LastQueryTime = time.Now().Unix()
-	newSession.ArrivalHorizonShownMinutes = window
+	newSession.ArrivalHorizonShownMinutes = offset + len(arrivals)
 	if err := h.SessionStore.SetSMSSession(phoneNumber, &newSession); err != nil {
 		// Log error but still send the response
 		log.Printf("Failed to set SMS session for %s: %v", phoneNumber, err)

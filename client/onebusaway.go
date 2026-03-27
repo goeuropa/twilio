@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1506,6 +1507,17 @@ func (c *OneBusAwayClient) ProcessArrivals(obaResp *models.OneBusAwayResponse, m
 
 		arrivals = append(arrivals, arrival)
 	}
+
+	// Keep arrivals deterministic and user-friendly: nearest departures first.
+	sort.SliceStable(arrivals, func(i, j int) bool {
+		if arrivals[i].MinutesUntilArrival == arrivals[j].MinutesUntilArrival {
+			if arrivals[i].RouteShortName == arrivals[j].RouteShortName {
+				return arrivals[i].TripHeadsign < arrivals[j].TripHeadsign
+			}
+			return arrivals[i].RouteShortName < arrivals[j].RouteShortName
+		}
+		return arrivals[i].MinutesUntilArrival < arrivals[j].MinutesUntilArrival
+	})
 
 	return arrivals
 }
