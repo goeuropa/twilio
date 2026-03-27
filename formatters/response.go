@@ -9,15 +9,26 @@ import (
 	"oba-twilio/models"
 )
 
-func FormatSMSResponse(arrivals []models.Arrival, stopName string) string {
+func FormatSMSResponse(arrivals []models.Arrival, stopName string, lm *localization.LocalizationManager, language string) string {
 	if len(arrivals) == 0 {
+		if lm != nil {
+			if msg := localizedOrEmpty(lm.GetString("sms.no_arrivals", language), "sms.no_arrivals"); msg != "" {
+				return msg
+			}
+		}
 		return "No upcoming arrivals found for this stop."
 	}
 
 	var response strings.Builder
+	stopLabel := "Stop"
+	if lm != nil {
+		if localized := localizedOrEmpty(lm.GetString("sms.arrival.stop_label", language), "sms.arrival.stop_label"); localized != "" {
+			stopLabel = localized
+		}
+	}
 
 	if stopName != "" {
-		response.WriteString(fmt.Sprintf("Stop: %s\n", stopName))
+		response.WriteString(fmt.Sprintf("%s: %s\n", stopLabel, stopName))
 	}
 
 	for i, arrival := range arrivals {
@@ -26,13 +37,27 @@ func FormatSMSResponse(arrivals []models.Arrival, stopName string) string {
 		}
 
 		timeText := formatArrivalTime(arrival.MinutesUntilArrival)
-		response.WriteString(fmt.Sprintf("Route %s to %s: %s\n",
-			arrival.RouteShortName,
-			arrival.TripHeadsign,
-			timeText))
+		routeLine := ""
+		if lm != nil {
+			routeLine = localizedOrEmpty(
+				lm.GetString("sms.arrival.route_to", language, arrival.RouteShortName, arrival.TripHeadsign, timeText),
+				"sms.arrival.route_to",
+			)
+		}
+		if routeLine == "" {
+			routeLine = fmt.Sprintf("Route %s to %s: %s", arrival.RouteShortName, arrival.TripHeadsign, timeText)
+		}
+		response.WriteString(routeLine + "\n")
 	}
 
 	return strings.TrimSpace(response.String())
+}
+
+func localizedOrEmpty(value, key string) string {
+	if value == "" || value == key {
+		return ""
+	}
+	return value
 }
 
 // RouteGroup represents arrivals grouped by route and headsign

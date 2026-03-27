@@ -23,6 +23,8 @@
   "voice.arrival.no_arrivals": "No se encontraron próximas llegadas para esta parada.",
   "sms.no_stops_found": "Lo siento, no se encontraron paradas con ID %s. Por favor verifique e inténtelo de nuevo.",
   "sms.no_arrivals": "No se encontraron próximas llegadas para esta parada.",
+  "sms.arrival.stop_label": "Parada",
+  "sms.arrival.route_to": "Ruta %s hacia %s: %s",
   "sms.service_unavailable": "El servicio {brand} no está disponible temporalmente. Por favor inténtelo de nuevo.",
   "sms.error.invalid_choice": "Por favor elija un número entre 1 y %d.",
   "voice.error.invalid_stop_id": "ID de parada inválido. Por favor vuelva a llamar con un ID de parada válido.",

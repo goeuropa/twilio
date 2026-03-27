@@ -24,6 +24,8 @@
   "voice.arrival.no_arrivals": "No upcoming arrivals found for this stop.",
   "sms.no_stops_found": "Sorry, no stops found with ID %s. Please check and try again.",
   "sms.no_arrivals": "No upcoming arrivals found for this stop.",
+  "sms.arrival.stop_label": "Stop",
+  "sms.arrival.route_to": "Route %s to %s: %s",
   "sms.more.no_additional": "No additional buses in this time range. Try 'more' again later or send a new stop ID.",
   "sms.service_unavailable": "{brand} service is temporarily unavailable. Please try again.",
   "sms.error.invalid_choice": "Please choose a number between 1 and %d.",

@@ -11,6 +11,7 @@ import (
 )
 
 func TestFormatSMSResponse(t *testing.T) {
+	lm := localization.NewTestManager()
 	arrivals := []models.Arrival{
 		{
 			RouteShortName:      "8",
@@ -34,7 +35,7 @@ func TestFormatSMSResponse(t *testing.T) {
 		},
 	}
 
-	result := FormatSMSResponse(arrivals, "Pine St & 3rd Ave")
+	result := FormatSMSResponse(arrivals, "Pine St & 3rd Ave", lm, "en-US")
 
 	assert.Contains(t, result, "Pine St & 3rd Ave")
 	assert.Contains(t, result, "Route 8 to Seattle Center: 3 min")
@@ -47,8 +48,32 @@ func TestFormatSMSResponse(t *testing.T) {
 }
 
 func TestFormatSMSResponse_Empty(t *testing.T) {
-	result := FormatSMSResponse([]models.Arrival{}, "Test Stop")
+	lm := localization.NewTestManager()
+	result := FormatSMSResponse([]models.Arrival{}, "Test Stop", lm, "en-US")
 	assert.Equal(t, "No upcoming arrivals found for this stop.", result)
+}
+
+func TestFormatSMSResponse_PolishLocalization(t *testing.T) {
+	lm := localization.NewTestManagerWithStrings(
+		map[string]map[string]string{
+			"pl": {
+				"sms.arrival.stop_label": "Przystanek",
+				"sms.arrival.route_to":   "Linia %s do %s: %s",
+			},
+		},
+		[]string{"pl"},
+	)
+	arrivals := []models.Arrival{
+		{
+			RouteShortName:      "1",
+			TripHeadsign:        "Franowo",
+			MinutesUntilArrival: 2,
+		},
+	}
+
+	result := FormatSMSResponse(arrivals, "Franowo", lm, "pl")
+	assert.Contains(t, result, "Przystanek: Franowo")
+	assert.Contains(t, result, "Linia 1 do Franowo: 2 min")
 }
 
 func TestFormatVoiceResponse(t *testing.T) {

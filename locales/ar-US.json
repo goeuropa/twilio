@@ -23,6 +23,8 @@
   "voice.arrival.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
   "sms.no_stops_found": "عذرا، لم يتم العثور على محطات برقم %s. يرجى التحقق والمحاولة مرة أخرى.",
   "sms.no_arrivals": "لم يتم العثور على وصولات قادمة لهذه المحطة.",
+  "sms.arrival.stop_label": "المحطة",
+  "sms.arrival.route_to": "الخط %s إلى %s: %s",
   "sms.service_unavailable": "خدمة {brand} غير متاحة مؤقتا. يرجى المحاولة مرة أخرى.",
   "sms.error.invalid_choice": "يرجى اختيار رقم بين 1 و %d.",
   "voice.error.invalid_stop_id": "رقم محطة غير صحيح. يرجى المحاولة مرة أخرى برقم محطة صحيح.",

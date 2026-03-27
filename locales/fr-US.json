@@ -23,6 +23,8 @@
   "voice.arrival.no_arrivals": "Aucune arrivée prochaine trouvée pour cet arrêt.",
   "sms.no_stops_found": "Désolé, aucun arrêt trouvé avec l'ID %s. Veuillez vérifier et réessayer.",
   "sms.no_arrivals": "Aucune arrivée prochaine trouvée pour cet arrêt.",
+  "sms.arrival.stop_label": "Arrêt",
+  "sms.arrival.route_to": "Ligne %s vers %s : %s",
   "sms.service_unavailable": "Le service {brand} est temporairement indisponible. Veuillez réessayer.",
   "sms.error.invalid_choice": "Veuillez choisir un numéro entre 1 et %d.",
   "voice.error.invalid_stop_id": "ID d'arrêt invalide. Veuillez réessayer avec un ID d'arrêt valide.",

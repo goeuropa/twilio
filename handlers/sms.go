@@ -266,10 +266,10 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		if session.ArrivalHorizonShownMinutes > 0 {
 			message = h.LocalizationManager.GetString("sms.more.no_additional", session.Language)
 		} else {
-			message = formatters.FormatSMSResponse(arrivals, stopDisplayName)
+			message = formatters.FormatSMSResponse(arrivals, stopDisplayName, h.LocalizationManager, session.Language)
 		}
 	} else {
-		message = formatters.FormatSMSResponse(arrivals, stopDisplayName)
+		message = formatters.FormatSMSResponse(arrivals, stopDisplayName, h.LocalizationManager, session.Language)
 	}
 
 	// Add menu hints if there are arrivals

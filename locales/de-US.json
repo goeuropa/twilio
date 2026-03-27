@@ -23,6 +23,8 @@
   "voice.arrival.no_arrivals": "Keine bevorstehenden Ankünfte für diese Haltestelle gefunden.",
   "sms.no_stops_found": "Entschuldigung, keine Haltestellen mit ID %s gefunden. Bitte überprüfen und erneut versuchen.",
   "sms.no_arrivals": "Keine bevorstehenden Ankünfte für diese Haltestelle gefunden.",
+  "sms.arrival.stop_label": "Haltestelle",
+  "sms.arrival.route_to": "Linie %s nach %s: %s",
   "sms.service_unavailable": "{brand}-Service ist vorübergehend nicht verfügbar. Bitte erneut versuchen.",
   "sms.error.invalid_choice": "Bitte wählen Sie eine Nummer zwischen 1 und %d.",
   "voice.error.invalid_stop_id": "Ungültige Haltestellen-ID. Bitte rufen Sie erneut mit einer gültigen Haltestellen-ID an.",

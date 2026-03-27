@@ -23,6 +23,8 @@
   "voice.arrival.no_arrivals": "该站点没有即将到达的班次。",
   "sms.no_stops_found": "抱歉，找不到ID为%s的站点。请检查后重试。",
   "sms.no_arrivals": "该站点没有即将到达的班次。",
+  "sms.arrival.stop_label": "站点",
+  "sms.arrival.route_to": "%s路开往%s：%s",
   "sms.service_unavailable": "{brand}服务暂时不可用。请重试。",
   "sms.error.invalid_choice": "请选择1到%d之间的数字。",
   "voice.error.invalid_stop_id": "无效的站点ID。请使用有效的站点ID重新拨打。",
