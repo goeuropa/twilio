@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -151,6 +152,25 @@ func main() {
 	handlers.SetAnalyticsManager(smsHandler, analyticsManager, analyticsConfig.HashSalt)
 	voiceHandler.SetAnalytics(analyticsManager, analyticsConfig.HashSalt)
 
+	arrivalFilterEnabled := parseEnvBool("ARRIVAL_FILTER_ENABLED", false)
+	arrivalFilterFallback := parseEnvBool("ARRIVAL_FILTER_FALLBACK_TO_UNFILTERED", true)
+	smsThreshold := parseEnvInt("ARRIVAL_FILTER_SMS_MAX_EARLY_MINUTES", 20)
+	voiceThreshold := parseEnvInt("ARRIVAL_FILTER_VOICE_MAX_EARLY_MINUTES", 15)
+	smsHandler.SetArrivalFilterConfig(common.ArrivalFilterConfig{
+		Enabled:               arrivalFilterEnabled,
+		MaxPredictedEarlyMins: smsThreshold,
+		FallbackToUnfiltered:  arrivalFilterFallback,
+	})
+	voiceHandler.SetArrivalFilterConfig(common.ArrivalFilterConfig{
+		Enabled:               arrivalFilterEnabled,
+		MaxPredictedEarlyMins: voiceThreshold,
+		FallbackToUnfiltered:  arrivalFilterFallback,
+	})
+	log.Printf(
+		"Arrival filter config: enabled=%t fallback=%t sms_threshold=%d voice_threshold=%d",
+		arrivalFilterEnabled, arrivalFilterFallback, smsThreshold, voiceThreshold,
+	)
+
 	// Initialize health check system
 	healthManager := health.NewManager(
 		health.WithTimeout(10*time.Second),
@@ -248,4 +268,30 @@ func main() {
 	}
 
 	log.Println("Server stopped gracefully")
+}
+
+func parseEnvBool(name string, defaultValue bool) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		log.Printf("Invalid bool for %s=%q, using default %t", name, v, defaultValue)
+		return defaultValue
+	}
+	return parsed
+}
+
+func parseEnvInt(name string, defaultValue int) int {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.Atoi(v)
+	if err != nil {
+		log.Printf("Invalid int for %s=%q, using default %d", name, v, defaultValue)
+		return defaultValue
+	}
+	return parsed
 }

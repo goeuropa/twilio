@@ -34,6 +34,7 @@ type SMSHandler struct {
 	SessionStore        *common.SessionStore
 	LocalizationManager *localization.LocalizationManager
 	ErrorHandler        *common.ErrorHandler
+	arrivalFilterConfig common.ArrivalFilterConfig
 	analyticsManager    middleware.AnalyticsManager
 	analyticsHashSalt   string
 }
@@ -44,7 +45,16 @@ func NewSMSHandler(obaClient client.OneBusAwayClientInterface, locManager *local
 		SessionStore:        common.NewSessionStore(),
 		LocalizationManager: locManager,
 		ErrorHandler:        common.NewErrorHandler(locManager),
+		arrivalFilterConfig: common.ArrivalFilterConfig{
+			Enabled:               false,
+			MaxPredictedEarlyMins: 15,
+			FallbackToUnfiltered:  true,
+		},
 	}
+}
+
+func (h *SMSHandler) SetArrivalFilterConfig(cfg common.ArrivalFilterConfig) {
+	h.arrivalFilterConfig = cfg
 }
 
 func (h *SMSHandler) Close() {
@@ -242,6 +252,8 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 	}
 
 	arrivalsAll := h.OBAClient.ProcessArrivals(obaResp, window)
+	filteredArrivals, excluded, fallbackUsed := common.FilterArrivals(arrivalsAll, h.arrivalFilterConfig)
+	arrivalsAll = filteredArrivals
 
 	// Use paged continuation for SMS: "more" returns the next chunk, not an arbitrary time jump.
 	// ArrivalHorizonShownMinutes stores how many arrivals were already shown in this session.
@@ -258,11 +270,13 @@ func (h *SMSHandler) getAndFormatArrivalsWithStopNameAndSession(c *gin.Context, 
 		arrivals = arrivals[:smsPageSize]
 	}
 	log.Printf(
-		"SMS pagination for %s: stop=%s window=%d total_arrivals=%d offset=%d page_size=%d returned=%d",
+		"SMS pagination for %s: stop=%s window=%d total_arrivals=%d excluded=%d fallback=%t offset=%d page_size=%d returned=%d",
 		phoneNumber,
 		fullStopID,
 		window,
 		len(arrivalsAll),
+		excluded,
+		fallbackUsed,
 		offset,
 		smsPageSize,
 		len(arrivals),

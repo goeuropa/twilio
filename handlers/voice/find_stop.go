@@ -10,6 +10,7 @@ import (
 	"github.com/twilio/twilio-go/twiml"
 
 	"oba-twilio/formatters"
+	"oba-twilio/handlers/common"
 	"oba-twilio/models"
 	"oba-twilio/validation"
 )
@@ -304,6 +305,8 @@ func (h *Handler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phoneNumb
 	}
 
 	arrivals := h.OBAClient.ProcessArrivals(obaResp, window)
+	filteredArrivals, excluded, fallbackUsed := common.FilterArrivals(arrivals, h.arrivalFilterConfig)
+	arrivals = filteredArrivals
 
 	// Get the human-readable stop name instead of using the technical stop ID
 	stopName := ""
@@ -315,7 +318,10 @@ func (h *Handler) getAndFormatVoiceArrivalsWithSession(c *gin.Context, phoneNumb
 	}
 
 	language := h.getLanguageFromRequest(c)
-	log.Printf("Formatting voice response for %s: stop=%s, arrivals=%d", phoneNumber, stopName, len(arrivals))
+	log.Printf(
+		"Formatting voice response for %s: stop=%s, arrivals=%d, excluded=%d, fallback=%t",
+		phoneNumber, stopName, len(arrivals), excluded, fallbackUsed,
+	)
 
 	message := formatters.FormatVoiceResponse(arrivals, stopName, h.LocalizationManager, language)
 	log.Printf("Voice message for %s: %s", phoneNumber, message)
