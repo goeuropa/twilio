@@ -76,6 +76,54 @@ func TestFormatSMSResponse_PolishLocalization(t *testing.T) {
 	assert.Contains(t, result, "Linia 1 do Franowo: 2 min")
 }
 
+func TestFormatSMSResponse_LocalizesNow(t *testing.T) {
+	lm := localization.NewTestManagerWithStrings(
+		map[string]map[string]string{
+			"pl-PL": {
+				"sms.arrival.stop_label": "Przystanek",
+				"sms.arrival.route_to":   "Linia %s do %s: %s",
+				"voice.time.now":         "Teraz",
+			},
+		},
+		[]string{"pl-PL"},
+	)
+	arrivals := []models.Arrival{
+		{
+			RouteShortName:      "8",
+			TripHeadsign:        "Ogrody",
+			MinutesUntilArrival: 0,
+		},
+	}
+
+	result := FormatSMSResponse(arrivals, "Rondo", lm, "pl-PL")
+	assert.Contains(t, result, "Linia 8 do Ogrody: Teraz")
+	assert.NotContains(t, result, "Now")
+}
+
+func TestFormatSMSResponse_LocalizesMinutes(t *testing.T) {
+	lm := localization.NewTestManagerWithStrings(
+		map[string]map[string]string{
+			"xx-XX": {
+				"sms.arrival.stop_label": "StopX",
+				"sms.arrival.route_to":   "R %s -> %s: %s",
+				"voice.time.minute":      "ONE_MIN",
+				"voice.time.minutes":     "%d_MINS",
+			},
+		},
+		[]string{"xx-XX"},
+	)
+	arrivals := []models.Arrival{
+		{RouteShortName: "1", TripHeadsign: "A", MinutesUntilArrival: 1},
+		{RouteShortName: "2", TripHeadsign: "B", MinutesUntilArrival: 7},
+	}
+
+	result := FormatSMSResponse(arrivals, "S", lm, "xx-XX")
+	assert.Contains(t, result, "R 1 -> A: ONE_MIN")
+	assert.Contains(t, result, "R 2 -> B: 7_MINS")
+	assert.NotContains(t, result, "1 min")
+	assert.NotContains(t, result, "7 min")
+}
+
 func TestFormatVoiceResponse(t *testing.T) {
 	// Create test localization manager
 	lm := localization.NewTestManager()

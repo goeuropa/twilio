@@ -36,7 +36,7 @@ func FormatSMSResponse(arrivals []models.Arrival, stopName string, lm *localizat
 			break
 		}
 
-		timeText := formatArrivalTime(arrival.MinutesUntilArrival)
+		timeText := formatArrivalTimeLocalized(arrival.MinutesUntilArrival, lm, language)
 		routeLine := ""
 		if lm != nil {
 			routeLine = localizedOrEmpty(
@@ -154,6 +154,25 @@ func formatArrivalTime(minutes int) string {
 	} else {
 		return fmt.Sprintf("%d min", minutes)
 	}
+}
+
+func formatArrivalTimeLocalized(minutes int, lm *localization.LocalizationManager, language string) string {
+	if lm != nil {
+		if minutes <= 0 {
+			if nowText := localizedOrEmpty(lm.GetString("voice.time.now", language), "voice.time.now"); nowText != "" {
+				return nowText
+			}
+		} else if minutes == 1 {
+			if oneMin := localizedOrEmpty(lm.GetString("voice.time.minute", language), "voice.time.minute"); oneMin != "" {
+				return oneMin
+			}
+		} else {
+			if manyMin := localizedOrEmpty(lm.GetString("voice.time.minutes", language, minutes), "voice.time.minutes"); manyMin != "" {
+				return manyMin
+			}
+		}
+	}
+	return formatArrivalTime(minutes)
 }
 
 func formatArrivalTimeVoice(minutes int) string {
