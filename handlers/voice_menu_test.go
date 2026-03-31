@@ -279,6 +279,164 @@ func TestVoiceHandler_SingleDigitWithoutDisambiguationSession_TreatedAsStopID(t 
 	mockClient.AssertExpectations(t)
 }
 
+func TestVoiceHandler_FindStop_MultipleStops_PromptsDisambiguation(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	twoStops := []models.StopOption{
+		{FullStopID: "1_999", AgencyName: "Metro", StopName: "Pine Street", DisplayText: "Metro: Pine Street"},
+		{FullStopID: "40_999", AgencyName: "Sound", StopName: "Oak Avenue", DisplayText: "Sound: Oak Avenue"},
+	}
+
+	mockClient.On("FindAllMatchingStops", "999").Return(twoStops, nil)
+
+	form := url.Values{}
+	form.Set("From", "+16667778888")
+	form.Set("Digits", "999")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "<Gather")
+	assert.Contains(t, body, "action=\"/voice/find_stop?lang=en-US\"")
+	assert.Contains(t, body, "Press 1 for Pine Street")
+	assert.Contains(t, body, "Press 2 for Oak Avenue")
+	assert.Contains(t, body, "Which stop would you like?")
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_FindStop_DisambiguationChoiceLoadsArrivals(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	twoStops := []models.StopOption{
+		{FullStopID: "1_999", AgencyName: "Metro", StopName: "Pine Street", DisplayText: "Metro: Pine Street"},
+		{FullStopID: "40_999", AgencyName: "Sound", StopName: "Oak Avenue", DisplayText: "Sound: Oak Avenue"},
+	}
+
+	mockResponseSecond := &models.OneBusAwayResponse{
+		Data: struct {
+			Entry struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			} `json:"entry"`
+		}{
+			Entry: struct {
+				ArrivalsAndDepartures []struct {
+					RouteShortName       string `json:"routeShortName"`
+					TripHeadsign         string `json:"tripHeadsign"`
+					PredictedArrivalTime int64  `json:"predictedArrivalTime"`
+					ScheduledArrivalTime int64  `json:"scheduledArrivalTime"`
+					Status               string `json:"status"`
+				} `json:"arrivalsAndDepartures"`
+				StopId string `json:"stopId"`
+			}{
+				StopId: "40_999",
+			},
+		},
+		Code: 200,
+	}
+
+	mockArrivals := []models.Arrival{
+		{RouteShortName: "99", TripHeadsign: "South", MinutesUntilArrival: 4},
+	}
+
+	mockClient.On("FindAllMatchingStops", "999").Return(twoStops, nil).Once()
+	mockClient.On("GetArrivalsAndDeparturesWithWindow", "40_999", 30).Return(mockResponseSecond, nil).Once()
+	mockClient.On("ProcessArrivals", mockResponseSecond, mock.Anything).Return(mockArrivals)
+	mockClient.On("GetStopInfo", "40_999").Return(&twoStops[1], nil)
+
+	phone := "+16667778899"
+
+	form1 := url.Values{}
+	form1.Set("From", phone)
+	form1.Set("Digits", "999")
+	w1 := httptest.NewRecorder()
+	req1, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form1.Encode()))
+	req1.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w1, req1)
+	require.Equal(t, http.StatusOK, w1.Code)
+	assert.Contains(t, w1.Body.String(), "<Gather")
+
+	form2 := url.Values{}
+	form2.Set("From", phone)
+	form2.Set("Digits", "2")
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+	body2 := w2.Body.String()
+	assert.Contains(t, body2, "Route 99")
+	assert.Contains(t, body2, "<Gather")
+	assert.Contains(t, body2, "/voice/menu_action?minutesAfter=60")
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_FindStop_DisambiguationInvalidChoice(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	twoStops := []models.StopOption{
+		{FullStopID: "1_999", StopName: "Pine Street"},
+		{FullStopID: "40_999", StopName: "Oak Avenue"},
+	}
+
+	mockClient.On("FindAllMatchingStops", "999").Return(twoStops, nil).Once()
+
+	phone := "+16667779900"
+
+	form1 := url.Values{}
+	form1.Set("From", phone)
+	form1.Set("Digits", "999")
+	w1 := httptest.NewRecorder()
+	req1, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form1.Encode()))
+	req1.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w1, req1)
+	require.Equal(t, http.StatusOK, w1.Code)
+
+	form2 := url.Values{}
+	form2.Set("From", phone)
+	form2.Set("Digits", "9")
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Contains(t, w2.Body.String(), "Please press a number between 1 and 2")
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestVoiceHandler_FindStop_EmptyDigits(t *testing.T) {
+	r, mockClient, _ := setupVoiceMenuTestRouter()
+
+	form := url.Values{}
+	form.Set("From", "+14444444444")
+	form.Set("Digits", "")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/voice/find_stop", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "receive any digits")
+
+	mockClient.AssertExpectations(t)
+}
+
 func TestVoiceHandler_MenuActionExtendDepartures(t *testing.T) {
 	r, mockClient, voiceHandler := setupVoiceMenuTestRouter()
 
