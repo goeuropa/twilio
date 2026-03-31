@@ -262,8 +262,8 @@ func TestSMSHandler_EmptyBody(t *testing.T) {
 func TestSMSHandler_InvalidStopID(t *testing.T) {
 	r, _, _ := setupSMSTestRouter()
 
-	// Use a string that fails ValidateStopID (invalid character '-')
-	w := sendSMSRequest(r, "+12345678901", "abc-123")
+	// Use a string that fails ValidateStopID (invalid character '@')
+	w := sendSMSRequest(r, "+12345678901", "abc@123")
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()

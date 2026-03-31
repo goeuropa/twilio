@@ -41,6 +41,18 @@ func TestValidateStopID(t *testing.T) {
 			description: "Valid stop ID with agency prefix should pass",
 		},
 		{
+			name:        "valid stop ID with hyphen",
+			input:       "abc-123",
+			expectError: false,
+			description: "Stop ID with hyphen should pass",
+		},
+		{
+			name:        "valid stop ID with underscore and hyphen",
+			input:       "1_stop-id",
+			expectError: false,
+			description: "Stop ID with both underscore and hyphen should pass",
+		},
+		{
 			name:        "valid minimum length stop ID",
 			input:       "123",
 			expectError: false,

@@ -12,9 +12,9 @@ import (
 var (
 	// stopIDPattern matches basic stop ID format:
 	// - 1–20 characters
-	// - letters, digits and underscores only
+	// - letters, digits, underscores, and hyphens
 	// Security-sensitive checks (injection patterns, control chars) are applied separately.
-	stopIDPattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,20}$`)
+	stopIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,20}$`)
 
 	// phoneNumberPattern matches valid phone numbers with optional country code
 	phoneNumberPattern = regexp.MustCompile(`^\+?[1-9][0-9]{7,14}$`)
@@ -45,9 +45,9 @@ func ValidateStopID(stopID string) error {
 		return models.NewValidationFailedError("stop ID must be between 1 and 20 characters", nil)
 	}
 
-	// Check basic format: only letters, digits and underscores
+	// Check basic format: letters, digits, underscores, hyphens
 	if !stopIDPattern.MatchString(stopID) {
-		return models.NewValidationFailedError("stop ID must contain only letters, numbers, and underscores", nil)
+		return models.NewValidationFailedError("stop ID must contain only letters, numbers, underscores, and hyphens", nil)
 	}
 
 	// Check for dangerous patterns

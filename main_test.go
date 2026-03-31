@@ -366,7 +366,7 @@ func TestTwiMLGeneration(t *testing.T) {
 	form.Set("From", "+14444444444")
 	form.Set("To", "+15555555555")
 	// Use a value that fails ValidateStopID to avoid stop lookup mocking
-	form.Set("Body", "a-b")
+	form.Set("Body", "a@b")
 	form.Set("MessageSid", "test-message-sid")
 
 	w := httptest.NewRecorder()
